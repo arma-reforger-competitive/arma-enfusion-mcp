@@ -43,9 +43,9 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/steffenbk/enfusion-mcp-BK.git"
+    "url": "https://github.com/arma-reforger-competitive/arma-enfusion-mcp.git"
   },
-  "homepage": "https://github.com/steffenbk/enfusion-mcp-BK",
+  "homepage": "https://github.com/arma-reforger-competitive/arma-enfusion-mcp",
   "license": "MIT",
   "keywords": [
     "mcp",

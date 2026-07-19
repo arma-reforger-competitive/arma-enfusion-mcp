@@ -1,6 +1,6 @@
 # v0.7.0 Bug Fixes + Features Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **For Claude:** Use the `/implement` skill (Matt-skills) to execute this plan task-by-task.
 
 **Goal:** Fix 10 bugs and add 3 features (config validation, fuzzy search, auto-fetch parent methods) for a v0.7.0 release.
 

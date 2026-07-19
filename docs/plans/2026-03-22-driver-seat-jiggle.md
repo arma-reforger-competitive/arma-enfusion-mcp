@@ -1,6 +1,6 @@
 # Driver Seat Jiggle Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** Use the `/implement` skill (Matt-skills) to execute this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add one bone item to the existing `Jiggles` ProcTransform in the M151A2 Body sheet so the `driver_idle` seat socket bounces vertically with suspension activity.
 

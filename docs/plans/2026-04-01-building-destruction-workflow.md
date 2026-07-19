@@ -1,6 +1,6 @@
 # Building Destruction Workflow Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** Use the `/implement` skill (Matt-skills) to execute this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add destruction workflow operators to `bk_building_tools` (Blender plugin) and create a new `building-setup` MCP tool that reads an export manifest to auto-create Workbench prefabs with slot wiring and destruction phase components.
 

@@ -18,6 +18,7 @@ import { encodeRequest, decodeResponse } from "./protocol.js";
 import { logger } from "../utils/logger.js";
 import type { Config } from "../config.js";
 import { generateGproj } from "../templates/gproj.js";
+import { toEnginePath } from "../utils/wsl-path.js";
 
 const DEFAULT_CLIENT_ID = "EnfusionMCP";
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -474,10 +475,13 @@ export class WorkbenchClient {
       );
     }
 
-    // 4. Spawn with -gproj to skip the launcher
+    // 4. Spawn with -gproj to skip the launcher.
+    //    resolvedGproj is a WSL path (used above for fs ops); the native Windows
+    //    exe can't resolve /mnt/... so the CLI arg must be a Windows path.
+    //    toEnginePath is a no-op outside WSL.
     const args: string[] = [];
     if (resolvedGproj) {
-      args.push("-gproj", resolvedGproj);
+      args.push("-gproj", toEnginePath(resolvedGproj));
     }
 
     // Use the game install directory as CWD so Workbench finds base game addons

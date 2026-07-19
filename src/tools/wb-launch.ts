@@ -5,6 +5,7 @@ import { existsSync, readdirSync } from "node:fs";
 import type { Config } from "../config.js";
 import type { WorkbenchClient } from "../workbench/client.js";
 import { formatConnectionStatus } from "../workbench/status.js";
+import { normalizeOsPath } from "../utils/wsl-path.js";
 
 export function registerWbLaunch(
   server: McpServer,
@@ -34,9 +35,17 @@ export function registerWbLaunch(
     },
     async ({ gprojPath }) => {
       try {
+        // Callers may pass a Windows path (D:\...) or a WSL path (/mnt/...).
+        // Normalize to the WSL form so Node fs ops (handler-script copy, dirname)
+        // resolve correctly; the client converts it back to a Windows path for
+        // the exe's -gproj argument. No-op outside WSL.
+        const wslGproj = gprojPath ? normalizeOsPath(gprojPath) : undefined;
+        // The mod's root directory — reused for defaultMod and the cleanup note.
+        const modDir = wslGproj ? dirname(resolve(wslGproj)) : null;
+
         // Remember which addon was requested so other tools default to it
-        if (gprojPath) {
-          config.defaultMod = basename(dirname(resolve(gprojPath)));
+        if (modDir) {
+          config.defaultMod = basename(modDir);
         }
 
         const alreadyRunning = await client.ping();
@@ -51,9 +60,8 @@ export function registerWbLaunch(
           };
         }
 
-        await client.ensureRunning(gprojPath);
+        await client.ensureRunning(wslGproj);
 
-        const modDir = gprojPath ? dirname(resolve(gprojPath)) : null;
         const note = modDir
           ? `\n\nNote: Handler scripts were copied to ${modDir}/Scripts/WorkbenchGame/EnfusionMCP/. ` +
             `Call **wb_cleanup** with the mod directory path when done to remove them before publishing.`
@@ -98,8 +106,9 @@ export function registerWbLaunch(
       },
     },
     async ({ modDir }) => {
-      // Resolve to absolute path and validate
-      const resolvedModDir = resolve(modDir);
+      // Resolve to absolute path and validate. Normalize a Windows path to WSL
+      // form first so the fs checks below resolve correctly. No-op outside WSL.
+      const resolvedModDir = resolve(normalizeOsPath(modDir));
       if (!existsSync(resolvedModDir)) {
         return {
           content: [{

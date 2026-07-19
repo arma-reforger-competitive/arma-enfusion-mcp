@@ -8,6 +8,7 @@ import { generateGproj } from "../templates/gproj.js";
 import { generateScript } from "../templates/script.js";
 import type { PatternLibrary } from "../patterns/loader.js";
 import { validateFilename, validateProjectPath } from "../utils/safe-path.js";
+import { toEnginePath, normalizeOsPath } from "../utils/wsl-path.js";
 import type { SearchEngine } from "../index/search-engine.js";
 import { parse, getProperty } from "../formats/enfusion-text.js";
 
@@ -486,20 +487,24 @@ export function registerMod(
           outputPath ||
           resolve(config.workbenchPath, "addons", addonName, "output");
 
+        // OS paths handed to the native Diag exe must be Windows paths when we
+        // run in WSL (the exe can't resolve /mnt/...). Normalize any input form
+        // to WSL first, then convert to the engine's Windows form. No-op outside
+        // WSL. Resource paths (e.g. a GUID filter) pass through unchanged.
         const args: string[] = [
           "-wbModule=ResourceManager",
           `-buildData`,
           platform ?? "PC",
-          buildOutput,
+          toEnginePath(normalizeOsPath(buildOutput)),
           addonName,
         ];
 
         if (gprojPath) {
-          args.push(`-gproj`, gprojPath);
+          args.push(`-gproj`, toEnginePath(normalizeOsPath(gprojPath)));
         }
 
         if (filterPath) {
-          args.push(`-filterPath`, filterPath);
+          args.push(`-filterPath`, toEnginePath(normalizeOsPath(filterPath)));
         }
 
         try {

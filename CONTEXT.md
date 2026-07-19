@@ -93,6 +93,20 @@ current behaviour. See ADR-0001.
   synonym for "template".
 - **handler scripts** — the Enfusion scripts the bridge installs into a mod so
   the Workbench NET API can service MCP calls.
+- **OS path** — a filesystem path to a real file/dir. Has two forms (see below).
+  Distinct from a *resource path*. Translated at WSL↔Windows boundaries by
+  `src/utils/wsl-path.ts`.
+- **resource path** — an Enfusion VFS path the engine resolves internally
+  (`Prefabs/Characters/...`, `{GUID}`, `$ArmaReforger:...`). **Never** an OS path
+  and **never** WSL↔Windows-translated. Used by `wb_resources` / `wb_validate` /
+  `LocatePrefabsFromPath`.
+- **WSL path** — the `/mnt/<x>/...` form of an OS path. What Node fs ops use,
+  since the server runs in WSL. The **canonical internal form**.
+- **Windows path** — the `<X>:\...` form of an OS path. What the native Workbench
+  exe and its NET API require. Produced only at the boundary (the `wb_launch` and
+  `mod build` exe args, `wb_projects open`) via `toEnginePath`. On native
+  Windows/Linux the translation helpers are no-ops, so the npm package is
+  unaffected.
 
 ## Related docs
 

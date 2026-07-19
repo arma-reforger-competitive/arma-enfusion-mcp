@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { WorkbenchClient } from "../workbench/client.js";
 import { formatConnectionStatus } from "../workbench/status.js";
+import { toEnginePath, normalizeOsPath } from "../utils/wsl-path.js";
 
 export function registerWbProjects(server: McpServer, client: WorkbenchClient): void {
   server.registerTool(
@@ -34,9 +35,13 @@ export function registerWbProjects(server: McpServer, client: WorkbenchClient): 
             };
           }
 
+          // `name` may be an addon name or a .gproj file path in any form
+          // (/mnt/..., D:\..., or D:/...). Normalize to WSL form then convert to
+          // the Windows path the NET API expects, so all input forms round-trip
+          // consistently. Addon names and resource paths pass through unchanged.
           const result = await client.call<Record<string, unknown>>("EMCP_WB_EditorControl", {
             action: "openResource",
-            path: name,
+            path: toEnginePath(normalizeOsPath(name)),
           });
 
           return {

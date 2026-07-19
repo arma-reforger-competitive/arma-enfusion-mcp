@@ -146,8 +146,10 @@ describe("enfusion-text serializer", () => {
     });
     const text = serialize(node);
     expect(text).toContain("GameProject {");
-    expect(text).toContain('ID "TestMod"');
-    expect(text).toContain('GUID "AAAA0000BBBB1111"');
+    // Bare-identifier property values are emitted unquoted, matching real
+    // .gproj files (e.g. `ID FindAndDestroy`, `GUID DCB86D202425D516`).
+    expect(text).toContain("ID TestMod");
+    expect(text).toContain("GUID AAAA0000BBBB1111");
     expect(text).toContain("}");
   });
 

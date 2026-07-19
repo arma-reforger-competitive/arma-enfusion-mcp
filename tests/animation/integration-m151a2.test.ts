@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import {
   parseAgrToStruct, parseAgfToStruct, parseAstToStruct,
   parseAsiToStruct, parseAwToStruct,
@@ -11,13 +11,21 @@ import {
 import { validateGraph } from "../../src/animation/validator.js";
 import { generateSuggestions, formatSuggestions } from "../../src/animation/suggestions.js";
 
-const BASE = "C:/Users/Steffen/Documents/My Games/ArmaReforgerWorkbench/profile/TESTANIM";
+// Integration fixtures live in a Workbench profile outside the repo (originally
+// the upstream author's machine). When they're absent the whole suite is skipped
+// rather than failing on ENOENT. Set the path via ENFUSION_ANIM_FIXTURES to run
+// it locally.
+const BASE =
+  process.env.ENFUSION_ANIM_FIXTURES ||
+  "C:/Users/Steffen/Documents/My Games/ArmaReforgerWorkbench/profile/TESTANIM";
+const HAS_FIXTURES = existsSync(BASE);
 
 function readFile(name: string): string {
+  if (!HAS_FIXTURES) return "";
   return readFileSync(`${BASE}/${name}`, "utf-8");
 }
 
-describe("M151A2 Integration", () => {
+describe.skipIf(!HAS_FIXTURES)("M151A2 Integration", () => {
   const agrContent = readFile("M151A2.agr");
   const agfContent = readFile("M151A2.agf");
   const astContent = readFile("M151A2.ast");

@@ -13,6 +13,7 @@
     "scrape": "tsx scripts/scrape.ts",
     "scrape:remote": "tsx scripts/scrape.ts --source remote",
     "scrape:local": "tsx scripts/scrape.ts --source local",
+    "gate:prototype": "tsx prototypes/upstream-gate/tui.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "prepare": "npm run build"

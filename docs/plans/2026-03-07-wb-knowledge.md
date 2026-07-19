@@ -1,6 +1,6 @@
 # wb_knowledge Tool Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **For Claude:** Use the `/implement` skill (Matt-skills) to execute this plan task-by-task.
 
 **Goal:** Add a `wb_knowledge` MCP tool that searches bundled Arma Reforger modding pattern files using a pre-built keyword index, giving any AI using the MCP access to the full KB without needing the local `arma-knowledge` folder.
 

@@ -1,6 +1,6 @@
 # Animation Editor Improvements Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** Use the `/implement` skill (Matt-skills) to execute this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Deep animation graph parsing, validation, and expanded guidance for Enfusion MCP animation tools.
 
@@ -8,7 +8,7 @@
 
 **Tech Stack:** TypeScript, Vitest, Zod, MCP SDK
 
-**Spec:** `docs/superpowers/specs/2026-03-22-animation-editor-improvements-design.md`
+**Spec:** `docs/plans/2026-03-22-animation-editor-improvements-design.md`
 
 ---
 

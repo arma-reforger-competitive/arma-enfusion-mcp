@@ -1,6 +1,6 @@
 # Vehicle Animation Graph Knowledge Base + MCP Tools — Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **For Claude:** Use the `/implement` skill (Matt-skills) to execute this plan task-by-task.
 
 **Goal:** Build a comprehensive vehicle animation graph knowledge base in the arma-knowledge patterns folder and add three MCP tools (`animation_graph_inspect`, `animation_graph_author`, `animation_graph_setup`) to the enfusion-mcp server.
 

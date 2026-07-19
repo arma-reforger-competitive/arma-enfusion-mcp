@@ -1,6 +1,6 @@
 # Workbench API Expansion v0.8.0 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** Use the `/implement` skill (Matt-skills) to execute this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add 8 items (1 bug fix, 6 new actions on existing tools, 1 new tool) to the Enfusion MCP server based on IDA Pro reverse-engineering findings.
 

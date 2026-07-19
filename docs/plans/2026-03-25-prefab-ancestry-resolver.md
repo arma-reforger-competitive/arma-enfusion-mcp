@@ -1,6 +1,6 @@
 # Prefab Ancestry Resolver Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** Use the `/implement` skill (Matt-skills) to execute this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Extract the prefab ancestry resolution logic from `prefab-inspect.ts` into a shared utility, then wire it into `game_duplicate` and `prefab_create` so both tools understand the full inherited component set when duplicating or creating prefabs.
 

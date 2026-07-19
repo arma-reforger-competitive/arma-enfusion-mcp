@@ -1,6 +1,6 @@
 # scenario_create_objective Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **For Claude:** Use the `/implement` skill (Matt-skills) to execute this plan task-by-task.
 
 **Goal:** Add a `scenario_create_objective` MCP tool that places a complete Scenario Framework objective hierarchy (Area → LayerTask → Layer_AI → SlotKill + SlotAI) in a live Workbench scene in a single call.
 

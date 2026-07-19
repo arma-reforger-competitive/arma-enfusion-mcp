@@ -1,6 +1,6 @@
 # Tool Discoverability Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** Use the `/implement` skill (Matt-skills) to execute this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Reduce MCP tool count from 54 → 47 by merging related tool families, and add a session-start routing file so Claude knows which tool to use from natural language.
 
@@ -712,7 +712,7 @@ Also update the `## How to Use` step 1 to mention the routing file:
 - [ ] **Step 2: Commit**
 
 ```bash
-git -C "C:/Users/Steffen/Documents/A_documents/Github/enfusion-mcp-BK" add docs/superpowers/plans/2026-03-27-tool-discoverability.md docs/superpowers/specs/2026-03-27-tool-discoverability-design.md
+git -C "C:/Users/Steffen/Documents/A_documents/Github/enfusion-mcp-BK" add docs/plans/2026-03-27-tool-discoverability.md docs/plans/2026-03-27-tool-discoverability-design.md
 git -C "C:/Users/Steffen/Documents/A_documents/Github/enfusion-mcp-BK" commit -m "docs: add tool discoverability spec and implementation plan"
 ```
 

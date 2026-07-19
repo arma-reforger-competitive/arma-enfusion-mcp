@@ -1,6 +1,6 @@
 # Prefab Recipe System Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** Use the `/implement` skill (Matt-skills) to execute this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace hardcoded `PREFAB_CONFIGS` with a JSON recipe system, expand prefab types from 7 to 12 categories, and add variant support for intelligent prefab generation.
 
@@ -1275,7 +1275,7 @@ Each task produces a working, testable increment with frequent commits. Old type
 
 ---
 
-## Plan complete and saved to `docs/superpowers/plans/2026-03-31-prefab-recipe-system.md`
+## Plan complete and saved to `docs/plans/2026-03-31-prefab-recipe-system.md`
 
 **Two execution options:**
 

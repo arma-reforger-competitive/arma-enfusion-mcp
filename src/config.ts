@@ -1,4 +1,3 @@
-import { readFileSync, existsSync } from "node:fs";
 import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
@@ -51,38 +50,12 @@ const DEFAULTS: Config = {
   workbenchPort: 5775,
 };
 
-function loadJsonFile(path: string): Partial<Config> {
-  try {
-    if (!existsSync(path)) return {};
-    const raw = readFileSync(path, "utf-8");
-    return JSON.parse(raw) as Partial<Config>;
-  } catch (e) {
-    // Distinguish read errors from parse errors so users can fix malformed JSON
-    const detail = e instanceof SyntaxError
-      ? `invalid JSON: ${e.message}`
-      : String(e);
-    logger.warn(`Failed to load config from ${path}: ${detail}`);
-  }
-  return {};
-}
-
 export function loadConfig(): Config {
   // 1. Start with defaults
   const config = { ...DEFAULTS };
 
-  // 2. Package-local config file
-  const localConfigPath = resolve(
-    dirname(fileURLToPath(import.meta.url)),
-    "..",
-    "enfusion-mcp.config.json"
-  );
-  Object.assign(config, loadJsonFile(localConfigPath));
-
-  // 3. User home config
-  const homeConfigPath = resolve(homedir(), ".enfusion-mcp", "config.json");
-  Object.assign(config, loadJsonFile(homeConfigPath));
-
-  // 4. Environment variables override everything
+  // 2. Environment variables are the single configuration mechanism. MCP clients
+  //    pass these via the server's `env` block (see README). See ADR 0005.
   if (process.env.ENFUSION_WORKBENCH_PATH) {
     config.workbenchPath = process.env.ENFUSION_WORKBENCH_PATH;
   }
@@ -97,7 +70,7 @@ export function loadConfig(): Config {
   }
   if (process.env.ENFUSION_MCP_DATA_DIR) {
     config.dataDir = process.env.ENFUSION_MCP_DATA_DIR;
-    // patternsDir is always <dataDir>/patterns unless explicitly set in a config file
+    // patternsDir is always <dataDir>/patterns
     config.patternsDir = join(process.env.ENFUSION_MCP_DATA_DIR, "patterns");
   }
   if (process.env.ENFUSION_WORKBENCH_HOST) {

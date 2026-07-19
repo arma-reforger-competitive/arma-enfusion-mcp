@@ -161,7 +161,24 @@ Control a running Workbench instance over TCP. Requires the handler scripts inst
 
 ## Configuration
 
-All optional. Sensible defaults are used when nothing is set.
+All optional — sensible defaults are used when nothing is set. Configuration is via environment variables, passed through your MCP client's `env` block:
+
+```json
+{
+  "mcpServers": {
+    "enfusion-mcp": {
+      "command": "npx",
+      "args": ["-y", "enfusion-mcp"],
+      "env": {
+        "ENFUSION_WORKBENCH_PATH": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Arma Reforger Tools",
+        "ENFUSION_PROJECT_PATH": "C:\\Users\\you\\Documents\\My Games\\ArmaReforgerWorkbench\\addons"
+      }
+    }
+  }
+}
+```
+
+### Core
 
 | Environment Variable | Description | Default |
 |---------------------|-------------|---------|
@@ -171,7 +188,17 @@ All optional. Sensible defaults are used when nothing is set.
 | `ENFUSION_WORKBENCH_HOST` | NET API host | `127.0.0.1` |
 | `ENFUSION_WORKBENCH_PORT` | NET API port | `5775` |
 
-Config can also be loaded from `~/.enfusion-mcp/config.json`. Environment variables take priority.
+### Advanced
+
+Rarely needed — the defaults are correct for almost everyone.
+
+| Environment Variable | Description | Default |
+|---------------------|-------------|---------|
+| `ENFUSION_EXTRACTED_PATH` | Path to a pre-extracted game-data library (flattened prefabs); `game_duplicate` checks here before falling back to `.pak` loose files | unset |
+| `ENFUSION_DEFAULT_MOD` | Static fallback addon folder name when `modName` is omitted in a tool call (normally set automatically when `wb_launch` opens a `.gproj`) | unset |
+| `ENFUSION_MCP_DATA_DIR` | Override the bundled data directory (scraped index + patterns) — for development | bundled `data/` |
+
+> **WSL users:** `ENFUSION_WORKBENCH_HOST` and Windows-path handling need extra setup — see [docs/wsl-windows-setup.md](docs/wsl-windows-setup.md).
 
 ## Requirements
 

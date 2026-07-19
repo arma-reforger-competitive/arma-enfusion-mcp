@@ -6,7 +6,6 @@ dist/
 
 
 .env
-enfusion-mcp.config.json
 
 .scraper-cache/
 *.tsbuildinfo

@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { createServer, type Server, type Socket } from "node:net";
-import { WorkbenchClient, WorkbenchError } from "../../src/workbench/client.js";
+import {
+  WorkbenchClient,
+  WorkbenchError,
+  classifyCallFailure,
+  isLoopbackHost,
+} from "../../src/workbench/client.js";
 import {
   decodePascalString,
   decodeInt32LE,
@@ -126,10 +131,10 @@ describe("WorkbenchClient", () => {
   it("throws CONNECTION_REFUSED on bad port", async () => {
     const badClient = new WorkbenchClient("127.0.0.1", 1);
     await expect(
-      badClient.call("ReloadScripts", {}, { skipAutoLaunch: true })
+      badClient.call("ReloadScripts", {})
     ).rejects.toThrow(WorkbenchError);
     try {
-      await badClient.call("ReloadScripts", {}, { skipAutoLaunch: true });
+      await badClient.call("ReloadScripts", {});
     } catch (e) {
       expect(e).toBeInstanceOf(WorkbenchError);
       expect((e as WorkbenchError).code).toBe("CONNECTION_REFUSED");
@@ -150,7 +155,7 @@ describe("WorkbenchClient", () => {
     const slowClient = new WorkbenchClient("127.0.0.1", port);
 
     await expect(
-      slowClient.call("ReloadScripts", {}, { timeout: 200, skipAutoLaunch: true })
+      slowClient.call("ReloadScripts", {}, { timeout: 200 })
     ).rejects.toThrow("timed out");
 
     // Destroy all held sockets so server.close() doesn't hang
@@ -201,7 +206,7 @@ describe("WorkbenchClient", () => {
     // Now try a dead client
     const badClient = new WorkbenchClient("127.0.0.1", 1);
     try {
-      await badClient.call("ReloadScripts", {}, { skipAutoLaunch: true });
+      await badClient.call("ReloadScripts", {});
     } catch { /* expected */ }
     expect(badClient.state.connected).toBe(false);
     expect(badClient.state.mode).toBe("unknown");
@@ -252,5 +257,99 @@ describe("WorkbenchClient", () => {
     const state = await badClient.refreshState();
     expect(state.connected).toBe(false);
     expect(state.mode).toBe("unknown");
+  });
+
+  // -- Fail-fast: no auto-launch on ordinary calls --
+
+  it("attaches a fail-fast hint on a refused call and never launches", async () => {
+    const badClient = new WorkbenchClient("127.0.0.1", 1);
+    try {
+      await badClient.call("EMCP_WB_Ping");
+      throw new Error("expected the call to reject");
+    } catch (e) {
+      expect(e).toBeInstanceOf(WorkbenchError);
+      expect((e as WorkbenchError).code).toBe("CONNECTION_REFUSED");
+      expect((e as WorkbenchError).hint).toContain("wb_launch");
+    }
+  });
+});
+
+describe("classifyCallFailure", () => {
+  it("maps CONNECTION_REFUSED to a wb_launch / bridge hint", () => {
+    const hint = classifyCallFailure(new WorkbenchError("x", "CONNECTION_REFUSED"));
+    expect(hint).toContain("wb_launch");
+    expect(hint).toContain("wb_diagnose");
+  });
+
+  it("maps TIMEOUT to a bridge hint", () => {
+    expect(classifyCallFailure(new WorkbenchError("x", "TIMEOUT"))).toContain("bridge");
+  });
+
+  it("maps an 'Undefined API func' API_ERROR to a handlers hint", () => {
+    const hint = classifyCallFailure(
+      new WorkbenchError("Workbench error: Undefined API func 'EMCP_WB_Ping'", "API_ERROR")
+    );
+    expect(hint).toContain("Handler scripts not loaded");
+  });
+
+  it("passes a genuine engine API_ERROR through verbatim", () => {
+    const msg = "Workbench error: entity not found";
+    expect(classifyCallFailure(new WorkbenchError(msg, "API_ERROR"))).toBe(msg);
+  });
+});
+
+describe("isLoopbackHost", () => {
+  it("recognises loopback addresses", () => {
+    expect(isLoopbackHost("127.0.0.1")).toBe(true);
+    expect(isLoopbackHost("localhost")).toBe(true);
+    expect(isLoopbackHost("::1")).toBe(true);
+  });
+  it("treats a bridged host as non-loopback", () => {
+    expect(isLoopbackHost("172.20.0.1")).toBe(false);
+  });
+});
+
+describe("diagnose", () => {
+  it("classifies ANY API_ERROR from ping as up_no_handlers (regression for #11)", async () => {
+    const mock = createMockWorkbench(() => {
+      // Any thrown error → mock replies with a non-Ok status → API_ERROR.
+      throw new Error("Undefined API func 'EMCP_WB_Ping'");
+    });
+    const client = new WorkbenchClient("127.0.0.1", mock.port);
+    const r = await client.diagnose();
+    expect(r.netApi).toBe("up_no_handlers");
+    // An API_ERROR means the socket answered → stays connected (write-through).
+    expect(client.state.connected).toBe(true);
+    await mock.close();
+  });
+
+  it("reports refused + unknown mode when nothing is listening", async () => {
+    const client = new WorkbenchClient("127.0.0.1", 1);
+    const r = await client.diagnose();
+    expect(r.netApi).toBe("refused");
+    expect(r.mode).toBe("unknown");
+    expect(client.state.connected).toBe(false);
+  });
+
+  it("reports up_with_handlers + live mode and writes through the cache", async () => {
+    const mock = createMockWorkbench((f) => {
+      if (f === "EMCP_WB_Ping") return { status: "ok" };
+      if (f === "EMCP_WB_GetState") return { mode: "play" };
+      return {};
+    });
+    const client = new WorkbenchClient("127.0.0.1", mock.port);
+    const r = await client.diagnose();
+    expect(r.netApi).toBe("up_with_handlers");
+    expect(r.mode).toBe("play");
+    expect(client.state.connected).toBe(true);
+    expect(client.state.mode).toBe("play");
+    await mock.close();
+  });
+
+  it("includes detected environment and bridged flag", async () => {
+    const client = new WorkbenchClient("127.0.0.1", 1);
+    const r = await client.diagnose();
+    expect(["windows", "linux", "wsl2"]).toContain(r.env);
+    expect(r.bridged).toBe(false); // 127.0.0.1 is loopback
   });
 });

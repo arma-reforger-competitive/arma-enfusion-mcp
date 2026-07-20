@@ -1,7 +1,38 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type { WorkbenchClient } from "../workbench/client.js";
+import {
+  PLAY_CONFIRM_TIMEOUT_MS,
+  PLAY_CONFIRM_POLL_MS,
+  type WorkbenchClient,
+  type WorkbenchMode,
+} from "../workbench/client.js";
 import { formatConnectionStatus, requireEditMode, requirePlayMode } from "../workbench/status.js";
+import { sleep, renderError } from "../workbench/tool-helpers.js";
+
+/**
+ * Poll EMCP_WB_GetState until the cached mode reaches `target` or the budget
+ * elapses. EMCP_WB_EditorControl carries no `mode`, so the switch must be
+ * confirmed out-of-band. Transient errors during the transition (socket briefly
+ * down while the world loads) are ignored — we keep polling until the deadline.
+ */
+async function confirmMode(
+  client: WorkbenchClient,
+  target: WorkbenchMode,
+  timeoutMs: number,
+  pollMs: number
+): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    try {
+      await client.call<Record<string, unknown>>("EMCP_WB_GetState");
+    } catch {
+      /* transient during the mode transition — keep polling */
+    }
+    if (client.state.mode === target) return true;
+    if (Date.now() >= deadline) return false;
+    await sleep(pollMs);
+  }
+}
 
 export function registerWbEditorTools(server: McpServer, client: WorkbenchClient): void {
   // wb_play — Switch to game mode (Play in Editor)
@@ -22,7 +53,7 @@ export function registerWbEditorTools(server: McpServer, client: WorkbenchClient
       },
     },
     async ({ debugMode, fullScreen }) => {
-      const modeErr = requireEditMode(client, "start play mode");
+      const modeErr = await requireEditMode(client, "start play mode");
       if (modeErr) {
         return { content: [{ type: "text" as const, text: modeErr + formatConnectionStatus(client) }] };
       }
@@ -32,20 +63,42 @@ export function registerWbEditorTools(server: McpServer, client: WorkbenchClient
         if (fullScreen !== undefined) params.fullScreen = fullScreen;
 
         const result = await client.call<Record<string, unknown>>("EMCP_WB_EditorControl", params);
+        if (result.status === "error") {
+          const detail = result.message ? String(result.message) : "the editor reported an error";
+          return {
+            content: [{ type: "text" as const, text: `Error starting play mode: ${detail}. Run \`wb_diagnose\` for details.${formatConnectionStatus(client)}` }],
+            isError: true,
+          };
+        }
 
+        // EditorControl returns no mode — confirm the switch with a bounded poll.
+        const confirmed = await confirmMode(client, "play", PLAY_CONFIRM_TIMEOUT_MS, PLAY_CONFIRM_POLL_MS);
+        if (confirmed) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `**Play Mode Started**\n\nWorkbench is now in game mode.${result.message ? `\n${result.message}` : ""}${formatConnectionStatus(client)}`,
+              },
+            ],
+          };
+        }
+
+        // Budget elapsed without a hard error — soft success. Marking isError
+        // would provoke a retry that double-fires the transition.
+        client.markStale();
         return {
           content: [
             {
               type: "text" as const,
-              text: `**Play Mode Started**\n\nWorkbench is now compiling and entering game mode.${result.message ? `\n${result.message}` : ""}${formatConnectionStatus(client)}`,
+              text: `**Play Initiated** — not yet confirmed. Workbench may still be compiling and loading the world. Run \`wb_state\` to confirm.${formatConnectionStatus(client)}`,
             },
           ],
         };
       } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
         return {
-          content: [{ type: "text" as const, text: `Error starting play mode: ${msg}${formatConnectionStatus(client)}` }],
-        isError: true,
+          content: [{ type: "text" as const, text: `Error starting play mode: ${renderError(e)}${formatConnectionStatus(client)}` }],
+          isError: true,
         };
       }
     }
@@ -60,7 +113,7 @@ export function registerWbEditorTools(server: McpServer, client: WorkbenchClient
       inputSchema: {},
     },
     async () => {
-      const modeErr = requirePlayMode(client, "stop play mode");
+      const modeErr = await requirePlayMode(client, "stop play mode");
       if (modeErr) {
         return { content: [{ type: "text" as const, text: modeErr + formatConnectionStatus(client) }] };
       }
@@ -68,20 +121,45 @@ export function registerWbEditorTools(server: McpServer, client: WorkbenchClient
         const result = await client.call<Record<string, unknown>>("EMCP_WB_EditorControl", {
           action: "stop",
         });
+        if (result.status === "error") {
+          const detail = result.message ? String(result.message) : "the editor reported an error";
+          return {
+            content: [{ type: "text" as const, text: `Error stopping play mode: ${detail}. Run \`wb_diagnose\` for details.${formatConnectionStatus(client)}` }],
+            isError: true,
+          };
+        }
 
+        // Stop returns to edit quickly — single-shot GetState (no poll budget).
+        try {
+          await client.call<Record<string, unknown>>("EMCP_WB_GetState");
+        } catch {
+          /* GetState may momentarily fail during the transition — fall through to soft success */
+        }
+
+        if (client.state.mode === "edit") {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `**Edit Mode Restored**\n\nWorkbench has returned to edit mode.${result.message ? `\n${result.message}` : ""}${formatConnectionStatus(client)}`,
+              },
+            ],
+          };
+        }
+
+        client.markStale();
         return {
           content: [
             {
               type: "text" as const,
-              text: `**Edit Mode Restored**\n\nWorkbench has returned to edit mode.${result.message ? `\n${result.message}` : ""}${formatConnectionStatus(client)}`,
+              text: `**Stop Initiated** — return to edit mode not yet confirmed. Run \`wb_state\` to confirm.${formatConnectionStatus(client)}`,
             },
           ],
         };
       } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
         return {
-          content: [{ type: "text" as const, text: `Error stopping play mode: ${msg}${formatConnectionStatus(client)}` }],
-        isError: true,
+          content: [{ type: "text" as const, text: `Error stopping play mode: ${renderError(e)}${formatConnectionStatus(client)}` }],
+          isError: true,
         };
       }
     }
@@ -101,7 +179,7 @@ export function registerWbEditorTools(server: McpServer, client: WorkbenchClient
       },
     },
     async ({ path }) => {
-      const modeErr = requireEditMode(client, "save");
+      const modeErr = await requireEditMode(client, "save");
       if (modeErr) {
         return { content: [{ type: "text" as const, text: modeErr + formatConnectionStatus(client) }] };
       }

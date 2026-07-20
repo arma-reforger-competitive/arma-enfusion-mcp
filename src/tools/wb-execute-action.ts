@@ -42,7 +42,7 @@ export function registerWbExecuteAction(server: McpServer, client: WorkbenchClie
         }
 
         // Mutating actions require edit mode
-        const modeErr = requireEditMode(client, `execute menu action "${menuPath}"`);
+        const modeErr = await requireEditMode(client, `execute menu action "${menuPath}"`);
         if (modeErr) {
           return { content: [{ type: "text" as const, text: modeErr + formatConnectionStatus(client) }] };
         }

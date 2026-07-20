@@ -63,7 +63,7 @@ export function registerWbEntityDuplicate(
       },
     },
     async ({ entityName, destPath, modName, replaceInScene }) => {
-      const modeErr = requireEditMode(client, "duplicate entity");
+      const modeErr = await requireEditMode(client, "duplicate entity");
       if (modeErr) {
         return { content: [{ type: "text" as const, text: modeErr + formatConnectionStatus(client) }] };
       }

@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { WorkbenchClient } from "../workbench/client.js";
 import { formatConnectionStatus } from "../workbench/status.js";
+import { renderError } from "../workbench/tool-helpers.js";
 
 export function registerWbState(server: McpServer, client: WorkbenchClient): void {
   server.registerTool(
@@ -39,7 +40,7 @@ export function registerWbState(server: McpServer, client: WorkbenchClient): voi
 
         return { content: [{ type: "text" as const, text: lines.join("\n") + formatConnectionStatus(client) }] };
       } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
+        const msg = renderError(e);
         return {
           content: [
             {

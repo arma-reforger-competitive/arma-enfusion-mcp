@@ -33,7 +33,7 @@ export function registerWbPrefabs(server: McpServer, client: WorkbenchClient): v
     },
     async ({ action, entityName, templatePath, searchPath }) => {
       if (MUTATING_PREFAB_ACTIONS.has(action)) {
-        const modeErr = requireEditMode(client, `${action === "createTemplate" ? "create template" : "save prefab"}`);
+        const modeErr = await requireEditMode(client, `${action === "createTemplate" ? "create template" : "save prefab"}`);
         if (modeErr) {
           return { content: [{ type: "text" as const, text: modeErr + formatConnectionStatus(client) }] };
         }

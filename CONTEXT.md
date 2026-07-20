@@ -85,8 +85,12 @@ current behaviour. See ADR-0001.
 
 - **KB (Knowledge Base)** — the offline index under `data/` that reference tools
   search. Not the live editor state.
-- **Workbench bridge** — the TCP link + auto-launch/handler-injection machinery
-  in `src/workbench/`. Prefer this over "NET API client".
+- **Workbench bridge** — the TCP link + (opt-in) launch/handler-injection
+  machinery in `src/workbench/`. Prefer this over "NET API client". Launch is
+  opt-in as of ADR-0006; ordinary calls fail fast.
+- **fresh / stale** — cache freshness derived from a 30 s TTL (`deriveStatus`): a
+  `connected` cache older than the TTL reads as `stale`. The footer reports it;
+  stale mode-guards re-probe before acting. See ADR-0006.
 - **reference tools / authoring tools / Workbench tools** — the three tool
   families (see subsystem 5). Use these exact names.
 - **recipe** — a JSON definition driving prefab generation (subsystem 6). Not a

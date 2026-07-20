@@ -1,7 +1,11 @@
 # 2. Auto-launching Workbench bridge with handler-script injection
 
 Date: 2026-07-14
-Status: Accepted (records current reality)
+Status: Superseded in part by [ADR-0006](0006-opt-in-launch-fail-fast-tooling.md)
+
+> **Note:** the self-provisioning machinery below still exists, but as of
+> ADR-0006 it is **opt-in** (`allowLaunch`, only `wb_launch`). Ordinary `wb_*`
+> calls no longer auto-launch on an unreachable NET API — they fail fast.
 
 ## Context
 

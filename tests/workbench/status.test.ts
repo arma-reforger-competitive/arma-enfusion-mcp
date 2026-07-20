@@ -1,7 +1,12 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import { createServer, type Server, type Socket } from "node:net";
-import { WorkbenchClient } from "../../src/workbench/client.js";
-import { formatConnectionStatus, requireEditMode, requirePlayMode } from "../../src/workbench/status.js";
+import { WorkbenchClient, STATE_TTL_MS, type WorkbenchState } from "../../src/workbench/client.js";
+import {
+  formatConnectionStatus,
+  deriveStatus,
+  requireEditMode,
+  requirePlayMode,
+} from "../../src/workbench/status.js";
 import { encodePascalString, decodePascalString, decodeInt32LE } from "../../src/workbench/protocol.js";
 
 function createMockWorkbench(
@@ -48,105 +53,122 @@ function createMockWorkbench(
   };
 }
 
+/** Build a lightweight client stub exposing a fixed cached state. */
+function stubClient(state: WorkbenchState): WorkbenchClient {
+  return { state } as unknown as WorkbenchClient;
+}
+
+describe("deriveStatus", () => {
+  const now = 1_000_000;
+
+  it("is disconnected when not connected", () => {
+    expect(deriveStatus({ connected: false, mode: "unknown", lastUpdated: now }, now)).toBe("disconnected");
+  });
+
+  it("is connected when fresh (within TTL)", () => {
+    const state: WorkbenchState = { connected: true, mode: "edit", lastUpdated: now - STATE_TTL_MS };
+    expect(deriveStatus(state, now)).toBe("connected");
+  });
+
+  it("is stale when older than TTL", () => {
+    const state: WorkbenchState = { connected: true, mode: "edit", lastUpdated: now - STATE_TTL_MS - 1 };
+    expect(deriveStatus(state, now)).toBe("stale");
+  });
+});
+
 describe("formatConnectionStatus", () => {
-  it("shows disconnected for fresh client", () => {
-    const client = new WorkbenchClient("127.0.0.1", 1);
-    const status = formatConnectionStatus(client);
+  const now = 1_000_000;
+
+  it("shows disconnected", () => {
+    const status = formatConnectionStatus(stubClient({ connected: false, mode: "unknown", lastUpdated: 0 }), now);
     expect(status).toContain("disconnected");
   });
 
-  it("shows edit mode after call with mode=edit", async () => {
-    const mock = createMockWorkbench(() => ({ mode: "edit" }));
-    const client = new WorkbenchClient("127.0.0.1", mock.port);
-    await client.call("EMCP_WB_Ping");
-    const status = formatConnectionStatus(client);
-    expect(status).toContain("edit mode");
-    await mock.close();
+  it("shows edit mode with age", () => {
+    const status = formatConnectionStatus(stubClient({ connected: true, mode: "edit", lastUpdated: now - 3000 }), now);
+    expect(status).toContain("edit mode (3s ago)");
   });
 
-  it("shows play mode after call with mode=play", async () => {
-    const mock = createMockWorkbench(() => ({ mode: "play" }));
-    const client = new WorkbenchClient("127.0.0.1", mock.port);
-    await client.call("EMCP_WB_Ping");
-    const status = formatConnectionStatus(client);
-    expect(status).toContain("play mode");
-    await mock.close();
+  it("shows play mode with age", () => {
+    const status = formatConnectionStatus(stubClient({ connected: true, mode: "play", lastUpdated: now - 1000 }), now);
+    expect(status).toContain("play mode (1s ago)");
   });
 
-  it("shows connected (mode unknown) when no mode in response", async () => {
-    const mock = createMockWorkbench(() => ({ status: "ok" }));
-    const client = new WorkbenchClient("127.0.0.1", mock.port);
-    await client.call("ReloadScripts");
-    const status = formatConnectionStatus(client);
-    expect(status).toContain("mode unknown");
-    await mock.close();
+  it("shows connected (mode unknown) with age", () => {
+    const status = formatConnectionStatus(stubClient({ connected: true, mode: "unknown", lastUpdated: now - 8000 }), now);
+    expect(status).toContain("connected (mode unknown) (8s ago)");
+  });
+
+  it("shows stale with last-seen age and previous mode", () => {
+    const state: WorkbenchState = { connected: true, mode: "edit", lastUpdated: now - 47_000 };
+    const status = formatConnectionStatus(stubClient(state), now);
+    expect(status).toContain("stale — last seen 47s ago (was edit)");
   });
 });
 
-describe("requireEditMode", () => {
+describe("requireEditMode / requirePlayMode (async, self-refreshing)", () => {
   let mock: ReturnType<typeof createMockWorkbench>;
-  let client: WorkbenchClient;
 
   afterEach(async () => {
     if (mock) await mock.close();
   });
 
-  it("blocks when mode is unknown, pointing at wb_state", () => {
-    client = new WorkbenchClient("127.0.0.1", 1);
-    const result = requireEditMode(client, "create entity");
-    expect(result).not.toBeNull();
-    expect(result).toContain("mode is unknown");
-    expect(result).toContain("wb_state");
-  });
-
-  it("returns null when mode is edit", async () => {
+  it("proceeds without a probe when fresh edit and edit is required", async () => {
     mock = createMockWorkbench(() => ({ mode: "edit" }));
-    client = new WorkbenchClient("127.0.0.1", mock.port);
-    await client.call("EMCP_WB_Ping");
-    expect(requireEditMode(client, "create entity")).toBeNull();
+    const client = new WorkbenchClient("127.0.0.1", mock.port);
+    await client.call("EMCP_WB_Ping"); // fresh edit
+    expect(await requireEditMode(client, "create entity")).toBeNull();
   });
 
-  it("returns warning when mode is play", async () => {
+  it("blocks with wb_stop when fresh play and edit is required", async () => {
     mock = createMockWorkbench(() => ({ mode: "play" }));
-    client = new WorkbenchClient("127.0.0.1", mock.port);
+    const client = new WorkbenchClient("127.0.0.1", mock.port);
     await client.call("EMCP_WB_Ping");
-    const result = requireEditMode(client, "create entity");
-    expect(result).not.toBeNull();
+    const result = await requireEditMode(client, "create entity");
     expect(result).toContain("play mode");
     expect(result).toContain("wb_stop");
   });
-});
 
-describe("requirePlayMode", () => {
-  let mock: ReturnType<typeof createMockWorkbench>;
-  let client: WorkbenchClient;
-
-  afterEach(async () => {
-    if (mock) await mock.close();
-  });
-
-  it("blocks when mode is unknown, pointing at wb_state", () => {
-    client = new WorkbenchClient("127.0.0.1", 1);
-    const result = requirePlayMode(client, "stop");
-    expect(result).not.toBeNull();
-    expect(result).toContain("mode is unknown");
-    expect(result).toContain("wb_state");
-  });
-
-  it("returns null when mode is play", async () => {
-    mock = createMockWorkbench(() => ({ mode: "play" }));
-    client = new WorkbenchClient("127.0.0.1", mock.port);
-    await client.call("EMCP_WB_Ping");
-    expect(requirePlayMode(client, "stop")).toBeNull();
-  });
-
-  it("returns warning when mode is edit", async () => {
+  it("blocks with wb_play when fresh edit and play is required", async () => {
     mock = createMockWorkbench(() => ({ mode: "edit" }));
-    client = new WorkbenchClient("127.0.0.1", mock.port);
+    const client = new WorkbenchClient("127.0.0.1", mock.port);
     await client.call("EMCP_WB_Ping");
-    const result = requirePlayMode(client, "stop play mode");
-    expect(result).not.toBeNull();
+    const result = await requirePlayMode(client, "stop");
     expect(result).toContain("edit mode");
     expect(result).toContain("wb_play");
+  });
+
+  it("probes once when mode is unknown, then proceeds on fresh mode", async () => {
+    mock = createMockWorkbench((apiFunc) => {
+      if (apiFunc === "EMCP_WB_GetState") return { mode: "edit" };
+      return { status: "ok" }; // no mode → stays unknown until GetState
+    });
+    const client = new WorkbenchClient("127.0.0.1", mock.port);
+    await client.call("ReloadScripts"); // connected, mode unknown
+    expect(client.state.mode).toBe("unknown");
+    expect(await requireEditMode(client, "create entity")).toBeNull();
+    expect(client.state.mode).toBe("edit"); // refreshState wrote through
+  });
+
+  it("fires exactly one refreshState probe when the cache is stale", async () => {
+    let getStateCalls = 0;
+    mock = createMockWorkbench((apiFunc) => {
+      if (apiFunc === "EMCP_WB_GetState") getStateCalls++;
+      return { mode: "edit" };
+    });
+    const client = new WorkbenchClient("127.0.0.1", mock.port);
+    await client.call("EMCP_WB_Ping"); // fresh edit
+    client.markStale(); // now stale
+    getStateCalls = 0; // only count the guard's probe
+
+    const result = await requireEditMode(client, "create entity");
+    expect(result).toBeNull();
+    expect(getStateCalls).toBe(1);
+  });
+
+  it("hard-blocks to wb_diagnose when the refresh fails (disconnected)", async () => {
+    const client = new WorkbenchClient("127.0.0.1", 1); // nothing listening
+    const result = await requireEditMode(client, "create entity");
+    expect(result).toContain("wb_diagnose");
   });
 });

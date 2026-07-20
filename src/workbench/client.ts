@@ -4,13 +4,14 @@
  * Each rawCall() opens a fresh TCP connection, sends one request, reads the
  * response, and closes the socket (protocol requirement).
  *
- * call() wraps rawCall() with auto-launch: if Workbench isn't running,
- * it installs handler scripts, launches the exe, waits for the NET API,
- * and retries the original call.
+ * call() wraps rawCall(). Auto-launch / handler-recovery is opt-in via
+ * `allowLaunch` (only wb_launch uses it); every other caller fails fast and
+ * gets a classified, actionable hint (classifyCallFailure) instead of a 90s
+ * blind poll.
  */
 
 import { Socket } from "node:net";
-import { existsSync, mkdirSync, copyFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, copyFileSync, readdirSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn, execSync } from "node:child_process";
@@ -36,6 +37,17 @@ const HANDLER_RECOMPILE_TIMEOUT_MS = 30_000;
 /** Interval between polls while waiting for handler script recompilation. */
 const HANDLER_RECOMPILE_POLL_MS = 2_000;
 
+/** Freshness window: cached state older than this is considered `stale` (see status.ts). */
+export const STATE_TTL_MS = 30_000;
+/** wb_play confirm-poll budget — the tool waits this long for mode to flip to play. */
+export const PLAY_CONFIRM_TIMEOUT_MS = 8_000;
+/** Interval between GetState polls while confirming a play-mode transition. */
+export const PLAY_CONFIRM_POLL_MS = 1_000;
+/** wb_reload confirm-poll budget — waits this long for handlers to recompile and respond. */
+export const RELOAD_CONFIRM_TIMEOUT_MS = 30_000;
+/** Interval between ping polls while confirming a reload finished. */
+export const RELOAD_CONFIRM_POLL_MS = 1_000;
+
 export type WorkbenchMode = "edit" | "play" | "unknown";
 
 export interface DiagnosticReport {
@@ -50,6 +62,12 @@ export interface DiagnosticReport {
   /** Result of the NET API probe. */
   netApi: "up_with_handlers" | "up_no_handlers" | "refused" | "timeout" | "error";
   netApiError?: string;
+  /** Detected runtime environment, so the renderer can branch the checklist. */
+  env: "windows" | "linux" | "wsl2";
+  /** True when the NET API host is a non-loopback address (a bridge is in use). */
+  bridged: boolean;
+  /** Live editor mode when connected with handlers; `unknown` otherwise. */
+  mode: WorkbenchMode;
 }
 
 export interface WorkbenchState {
@@ -61,11 +79,18 @@ export interface WorkbenchState {
 export interface WorkbenchCallOptions {
   /** Timeout in milliseconds (default 10 000). */
   timeout?: number;
-  /** Skip auto-launch on connection failure (used internally by ping). */
-  skipAutoLaunch?: boolean;
+  /**
+   * Opt in to auto-launch / handler-recovery on connection failure.
+   * Default false — ordinary tool calls fail fast (see classifyCallFailure).
+   * Only wb_launch sets this true.
+   */
+  allowLaunch?: boolean;
 }
 
 export class WorkbenchError extends Error {
+  /** One-line, actionable hint attached by call() when a fail-fast failure is classified. */
+  hint?: string;
+
   constructor(
     message: string,
     public readonly code:
@@ -78,6 +103,45 @@ export class WorkbenchError extends Error {
     super(message);
     this.name = "WorkbenchError";
   }
+}
+
+/**
+ * Map a failed call's error class to a one-line, actionable hint.
+ * Connectivity failures point at wb_launch / the bridge; a genuine engine
+ * API_ERROR is surfaced verbatim (it is not a connectivity problem).
+ */
+export function classifyCallFailure(err: WorkbenchError): string {
+  switch (err.code) {
+    case "CONNECTION_REFUSED":
+      return "Workbench not reachable. Run `wb_launch`, or check the WSL bridge. Run `wb_diagnose` for details.";
+    case "TIMEOUT":
+      return "Port open but no reply — check the bridge. Run `wb_diagnose` for details.";
+    case "API_ERROR":
+      if (err.message.includes("Undefined API func")) {
+        return "Handler scripts not loaded. Run `wb_launch`. Run `wb_diagnose` for details.";
+      }
+      return err.message;
+    default:
+      return err.message;
+  }
+}
+
+/** True when the host is a loopback address (localhost / 127.0.0.1 / ::1). */
+export function isLoopbackHost(host: string): boolean {
+  const h = host.trim().toLowerCase();
+  return h === "localhost" || h === "127.0.0.1" || h === "::1" || h.startsWith("127.");
+}
+
+/** Detect the runtime environment for diagnose's environment-branched checklist. */
+export function detectEnvironment(): "windows" | "linux" | "wsl2" {
+  if (process.platform === "win32") return "windows";
+  if (process.env.WSL_DISTRO_NAME) return "wsl2";
+  try {
+    if (/microsoft/i.test(readFileSync("/proc/version", "utf-8"))) return "wsl2";
+  } catch {
+    /* /proc/version unavailable — not WSL */
+  }
+  return "linux";
 }
 
 export class WorkbenchClient {
@@ -97,8 +161,8 @@ export class WorkbenchClient {
   ) {}
 
   /**
-   * Call a Workbench NET API function.
-   * Auto-launches Workbench if not running.
+   * Call a Workbench NET API function. Fails fast if Workbench is unreachable
+   * unless `allowLaunch` is set (see WorkbenchCallOptions).
    */
   async call<T = Record<string, unknown>>(
     apiFunc: string,
@@ -116,7 +180,10 @@ export class WorkbenchClient {
         if (err.code === "CONNECTION_REFUSED" || err.code === "TIMEOUT" || err.code === "PROTOCOL_ERROR") {
           this._state = { connected: false, mode: "unknown", lastUpdated: Date.now() };
         }
-        if (!options.skipAutoLaunch && this.config) {
+        // Auto-launch / handler-recovery is opt-in (only wb_launch passes
+        // allowLaunch). Every other caller fails fast so a down Workbench never
+        // costs 90s / 30s of blind polling.
+        if (options.allowLaunch && this.config) {
           if (err.code === "CONNECTION_REFUSED") {
             // Workbench not running — install handlers, launch, retry
             logger.info(`Workbench not running, auto-launching...`);
@@ -140,6 +207,8 @@ export class WorkbenchClient {
             return result;
           }
         }
+        // Attach a fail-fast hint so each tool's catch can render it uniformly.
+        err.hint = classifyCallFailure(err);
       }
       throw err;
     }
@@ -156,6 +225,15 @@ export class WorkbenchClient {
       this._state = { connected: false, mode: "unknown", lastUpdated: Date.now() };
       return { ...this._state };
     }
+  }
+
+  /**
+   * Force the cached state to read as `stale` (see deriveStatus): keeps the
+   * current connection/mode but expires freshness. Used by probe-after-mutate
+   * tools when a transition (play/reload) couldn't be confirmed within budget.
+   */
+  markStale(): void {
+    this._state.lastUpdated = Date.now() - STATE_TTL_MS - 1;
   }
 
   /**
@@ -195,7 +273,7 @@ export class WorkbenchClient {
    */
   async ping(): Promise<boolean> {
     try {
-      await this.rawCall("EMCP_WB_Ping", {}, { timeout: 3000, skipAutoLaunch: true });
+      await this.rawCall("EMCP_WB_Ping", {}, { timeout: 3000 });
       return true;
     } catch {
       return false;
@@ -294,27 +372,59 @@ export class WorkbenchClient {
       } catch { /* ignore */ }
     }
 
-    // --- NET API probe ---
+    // --- Environment detection (facts, looked up not asked) ---
+    const env = detectEnvironment();
+    const bridged = !isLoopbackHost(host);
+
+    // --- NET API probe (read-only, never launches) ---
+    // Structural classifier: ANY API_ERROR from the ping means the socket
+    // connected and the NET API answered with an application error, i.e. the
+    // handlers aren't loaded (up_no_handlers). We do NOT string-match here —
+    // the raw message is shown as evidence only.
     let netApi: DiagnosticReport["netApi"] = "refused";
     let netApiError: string | undefined;
+    let mode: WorkbenchMode = "unknown";
     try {
-      await this.rawCall("EMCP_WB_Ping", {}, { timeout: 3000, skipAutoLaunch: true });
+      await this.rawCall("EMCP_WB_Ping", {}, { timeout: 3000 });
       netApi = "up_with_handlers";
+      // Write through: the socket answered our handler, so we're connected.
+      this._state.connected = true;
+      this._state.lastUpdated = Date.now();
     } catch (err) {
       if (err instanceof WorkbenchError) {
         netApiError = err.message;
         if (err.code === "CONNECTION_REFUSED") {
           netApi = "refused";
+          this._state = { connected: false, mode: "unknown", lastUpdated: Date.now() };
         } else if (err.code === "TIMEOUT") {
           netApi = "timeout";
-        } else if (err.code === "API_ERROR" && err.message.includes("not existing Net API function")) {
+          this._state = { connected: false, mode: "unknown", lastUpdated: Date.now() };
+        } else if (err.code === "API_ERROR") {
           netApi = "up_no_handlers";
+          // The socket answered with an application error → still connected.
+          this._state.connected = true;
+          this._state.lastUpdated = Date.now();
         } else {
           netApi = "error";
+          this._state = { connected: false, mode: "unknown", lastUpdated: Date.now() };
         }
       } else {
         netApi = "error";
         netApiError = String(err);
+      }
+    }
+
+    // When handlers are up, probe live mode with GetState and write through.
+    if (netApi === "up_with_handlers") {
+      try {
+        const state = await this.rawCall<Record<string, unknown>>("EMCP_WB_GetState", {}, { timeout: 3000 });
+        this.extractMode(state);
+        this._state.connected = true;
+        this._state.lastUpdated = Date.now();
+        mode = this._state.mode;
+      } catch {
+        // GetState failed but ping succeeded — keep connected, leave mode unknown.
+        mode = "unknown";
       }
     }
 
@@ -329,6 +439,9 @@ export class WorkbenchClient {
       installedMods,
       netApi,
       netApiError,
+      env,
+      bridged,
+      mode,
     };
   }
 
@@ -501,7 +614,7 @@ export class WorkbenchClient {
     let lastErrorCode: WorkbenchError["code"] | undefined;
     while (Date.now() < deadline) {
       try {
-        await this.rawCall("EMCP_WB_Ping", {}, { timeout: 3000, skipAutoLaunch: true });
+        await this.rawCall("EMCP_WB_Ping", {}, { timeout: 3000 });
         this._state.connected = true;
         this._state.lastUpdated = Date.now();
         logger.info("Workbench NET API is responding.");

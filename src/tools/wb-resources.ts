@@ -30,7 +30,7 @@ export function registerWbResources(server: McpServer, client: WorkbenchClient):
       try {
         // Mutating actions require edit mode
         if (action === "register" || action === "rebuild") {
-          const modeErr = requireEditMode(client, `${action} resource`);
+          const modeErr = await requireEditMode(client, `${action} resource`);
           if (modeErr) {
             return { content: [{ type: "text" as const, text: modeErr + formatConnectionStatus(client) }] };
           }

@@ -21,6 +21,8 @@
  */
 
 import { release } from "node:os";
+import { execSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 
 /** `/mnt/<drive>/rest` — a WSL drive mount. */
 const WSL_MOUNT_RE = /^\/mnt\/([a-zA-Z])(\/.*|)$/;
@@ -52,6 +54,37 @@ export function isWsl(): boolean {
 
   cachedIsWsl = detectWsl(release(), process.platform);
   return cachedIsWsl;
+}
+
+/**
+ * Best-effort detection of the Windows host IP as seen from WSL2.
+ *
+ * Under default WSL2 NAT networking the Windows host is the eth0 default
+ * gateway (and also the `/etc/resolv.conf` nameserver). The Workbench NET API
+ * binds `0.0.0.0`, so connecting to this IP reaches it directly — no netsh
+ * portproxy bridge required. Returns null if nothing can be determined.
+ */
+export function detectWslHostIp(): string | null {
+  // 1. Default-route gateway — the Windows host under WSL2 NAT.
+  try {
+    const out = execSync("ip route show default", {
+      encoding: "utf-8",
+      timeout: 2000,
+    });
+    const m = /default via (\d+\.\d+\.\d+\.\d+)/.exec(out);
+    if (m) return m[1];
+  } catch {
+    /* fall through */
+  }
+  // 2. Fallback: the resolv.conf nameserver (also the Windows host on WSL2).
+  try {
+    const resolv = readFileSync("/etc/resolv.conf", "utf-8");
+    const m = /nameserver\s+(\d+\.\d+\.\d+\.\d+)/.exec(resolv);
+    if (m) return m[1];
+  } catch {
+    /* fall through */
+  }
+  return null;
 }
 
 /**

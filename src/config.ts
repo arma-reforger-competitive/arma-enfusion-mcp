@@ -2,6 +2,7 @@ import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
 import { logger } from "./utils/logger.js";
+import { isWsl, detectWslHostIp } from "./utils/wsl-path.js";
 
 export interface Config {
   /** Path to "Arma Reforger Tools" installation */
@@ -10,6 +11,11 @@ export interface Config {
   projectPath: string;
   /** Path to base game installation (auto-derived from workbenchPath) */
   gamePath: string;
+  /** Workbench profile root — the folder containing `addons/` and `profile/`
+   *  (default `<Documents>/My Games/ArmaReforgerWorkbench`). Used to resolve and
+   *  stage a launched mod's dependency chain. Set via ENFUSION_WORKBENCH_PROFILE;
+   *  WSL users must set it explicitly (homedir is the Linux home there). */
+  workbenchProfile: string;
   /** Optional path to a pre-extracted game data library (fully flattened prefabs).
    *  When set, game_duplicate checks here first before falling back to pak loose files.
    *  Set via ENFUSION_EXTRACTED_PATH env var. */
@@ -35,6 +41,7 @@ const DEFAULTS: Config = {
   workbenchPath: DEFAULT_WORKBENCH_PATH,
   projectPath: join(homedir(), "Documents", "My Games", "ArmaReforgerWorkbench", "addons"),
   gamePath: resolve(DEFAULT_WORKBENCH_PATH, "..", "Arma Reforger"),
+  workbenchProfile: join(homedir(), "Documents", "My Games", "ArmaReforgerWorkbench"),
   dataDir: resolve(
     dirname(fileURLToPath(import.meta.url)),
     "..",
@@ -65,6 +72,9 @@ export function loadConfig(): Config {
   if (process.env.ENFUSION_GAME_PATH) {
     config.gamePath = process.env.ENFUSION_GAME_PATH;
   }
+  if (process.env.ENFUSION_WORKBENCH_PROFILE) {
+    config.workbenchProfile = process.env.ENFUSION_WORKBENCH_PROFILE;
+  }
   if (process.env.ENFUSION_EXTRACTED_PATH) {
     config.extractedPath = process.env.ENFUSION_EXTRACTED_PATH;
   }
@@ -75,6 +85,21 @@ export function loadConfig(): Config {
   }
   if (process.env.ENFUSION_WORKBENCH_HOST) {
     config.workbenchHost = process.env.ENFUSION_WORKBENCH_HOST;
+  } else if (isWsl()) {
+    // Under WSL2 the Workbench NET API runs on the Windows host and binds
+    // 0.0.0.0, so it is reachable directly at the WSL default-gateway IP — no
+    // netsh portproxy bridge needed. Auto-detect it so WSL users don't have to
+    // set ENFUSION_WORKBENCH_HOST (and so a changed WSL IP self-heals on restart).
+    const hostIp = detectWslHostIp();
+    if (hostIp) {
+      config.workbenchHost = hostIp;
+      logger.info(`WSL detected — using Windows host IP ${hostIp} for the NET API.`);
+    } else {
+      logger.warn(
+        "WSL detected but could not auto-detect the Windows host IP. " +
+          "Set ENFUSION_WORKBENCH_HOST to the WSL gateway IP if wb_* tools cannot connect."
+      );
+    }
   }
   if (process.env.ENFUSION_WORKBENCH_PORT) {
     const port = parseInt(process.env.ENFUSION_WORKBENCH_PORT, 10);

@@ -20,6 +20,7 @@ import { logger } from "../utils/logger.js";
 import type { Config } from "../config.js";
 import { generateGproj } from "../templates/gproj.js";
 import { toEnginePath } from "../utils/wsl-path.js";
+import { stageDependencyChain, unstageDependencies } from "./dependencies.js";
 
 const DEFAULT_CLIENT_ID = "EnfusionMCP";
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -287,6 +288,19 @@ export class WorkbenchClient {
    * Safe to call even if scripts were never injected.
    */
   cleanupHandlerScripts(modDir: string): boolean {
+    // Also remove any dependency junctions we staged into the profile addons dir.
+    // Best-effort: junction removal must never block handler-script cleanup.
+    if (this.config?.workbenchProfile) {
+      try {
+        const removed = unstageDependencies(this.config.workbenchProfile);
+        if (removed.length) {
+          logger.info(`Removed staged dependency junctions: ${removed.join(", ")}`);
+        }
+      } catch (e) {
+        logger.warn(`Dependency junction cleanup failed: ${e}`);
+      }
+    }
+
     const handlerDir = resolve(modDir, "Scripts", "WorkbenchGame", HANDLER_FOLDER);
     logger.info(`Checking for handler scripts at: ${handlerDir}`);
     if (!existsSync(handlerDir)) {
@@ -562,6 +576,12 @@ export class WorkbenchClient {
       // If a previous session created {projectPath}/EnfusionMCP/ it would be
       // picked up as a sibling addon and cause compile-time class name conflicts.
       this.cleanupStandaloneAddon();
+      // 2b. Make the mod's dependency chain discoverable. A `-gproj` launch only
+      //     searches [gproj dir, ./addons, <profile>/addons] and ignores the GUI's
+      //     project-list registry, so dependencies living elsewhere (Workshop mods,
+      //     nested project repos) fail to load and Workbench silently falls back to
+      //     the base ArmaReforger project. Staging junctions them into <profile>/addons.
+      this.stageDependencies(resolvedGproj);
     } else {
       // No project found — fall back to standalone addon as last resort and open it
       // directly so its handlers at least compile (user's project won't be open).
@@ -592,9 +612,17 @@ export class WorkbenchClient {
     //    resolvedGproj is a WSL path (used above for fs ops); the native Windows
     //    exe can't resolve /mnt/... so the CLI arg must be a Windows path.
     //    toEnginePath is a no-op outside WSL.
+    //
+    //    -gproj selects the project; -wbModule=WorldEditor boots straight into the
+    //    World Editor (the module every wb_* tool drives) instead of the launcher.
+    //    Passed as a single "=" token to match the proven ResourceManager build
+    //    invocation in mod.ts. (Note: opening on the base ArmaReforger project is a
+    //    dependency-resolution failure, handled by stageDependencies above — not a
+    //    module-selection issue.)
     const args: string[] = [];
     if (resolvedGproj) {
       args.push("-gproj", toEnginePath(resolvedGproj));
+      args.push("-wbModule=WorldEditor");
     }
 
     // Use the game install directory as CWD so Workbench finds base game addons
@@ -649,6 +677,30 @@ export class WorkbenchClient {
       `Workbench launched but did not connect within ${LAUNCH_TIMEOUT_MS / 1000}s.\n\n${hint}`,
       "LAUNCH_FAILED"
     );
+  }
+
+  /**
+   * Resolve the target mod's transitive dependency chain and junction each
+   * dependency into the Workbench profile addons dir so a `-gproj` launch can
+   * find it. Best-effort: any failure is logged and launch proceeds (Workbench
+   * will then report the unresolved dependency itself).
+   */
+  private stageDependencies(gprojPath: string): void {
+    const profile = this.config?.workbenchProfile;
+    if (!profile) {
+      logger.warn(
+        "ENFUSION_WORKBENCH_PROFILE not configured — skipping dependency staging. " +
+          "Mods with dependencies outside the profile addons dir may not load."
+      );
+      return;
+    }
+    try {
+      const { created, warnings } = stageDependencyChain(gprojPath, profile);
+      if (created.length) logger.info(`Staged dependencies: ${created.join(", ")}`);
+      for (const w of warnings) logger.warn(`Dependency staging: ${w}`);
+    } catch (e) {
+      logger.warn(`Dependency staging failed: ${e}`);
+    }
   }
 
   private findWorkbenchExe(): string | null {

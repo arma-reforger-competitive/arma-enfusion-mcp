@@ -36,7 +36,7 @@ import { prefabTools } from "./tools/wb-prefabs.js";
 import { registerWbClipboard } from "./tools/wb-clipboard.js";
 import { registerWbScriptEditor } from "./tools/wb-script-editor.js";
 import { registerWbLocalization } from "./tools/wb-localization.js";
-import { registerWbProjects } from "./tools/wb-projects.js";
+import { projectTools } from "./tools/wb-projects.js";
 import { validateTools } from "./tools/wb-validate.js";
 import { registerWbState } from "./tools/wb-state.js";
 import { registerGameBrowse } from "./tools/game-browse.js";
@@ -94,12 +94,12 @@ export function registerTools(server: McpServer, config: Config): void {
     ...validateTools,
     ...componentTools,
     ...layerTools,
+    ...projectTools,
   ]);
   registerWbTerrain(server, wbClient);
   registerWbClipboard(server, wbClient);
   registerWbScriptEditor(server, wbClient);
   registerWbLocalization(server, wbClient);
-  registerWbProjects(server, wbClient);
   registerWbState(server, wbClient);
   registerScenarioTools(server, wbClient);
   registerScenarioCreate(server, config);

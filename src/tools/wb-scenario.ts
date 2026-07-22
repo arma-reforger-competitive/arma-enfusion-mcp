@@ -84,6 +84,18 @@ async function resolvePosition(
   return { error: `**${toolName} failed**\nCould not get camera position: ${camRes.message ?? "unknown error"}. Pass an explicit 'position' parameter.` };
 }
 
+/**
+ * scenario_create — place a Scenario Framework objective or Conflict base in
+ * the live scene.
+ *
+ * Left hand-written (not migrated to defineWorkbenchTool, T3/#25): each call is
+ * a ~15-step entity-creation orchestration with scene side-effects — it creates
+ * and reparents entities and sets properties in sequence, accumulates
+ * per-property warnings mid-flight (`propWarnings`), and on any failure runs a
+ * best-effort `cleanupEntities` rollback that it then formats into the error
+ * message. There is no single pure `formatter` seam the envelope's
+ * "guard → call(s) → format once → footer → catch" shape assumes.
+ */
 export function registerScenarioTools(server: McpServer, client: WorkbenchClient): void {
 
   // ---------------------------------------------------------------------------

@@ -91,6 +91,23 @@ current behaviour. See ADR-0001.
 - **fresh / stale** — cache freshness derived from a 30 s TTL (`deriveStatus`): a
   `connected` cache older than the TTL reads as `stale`. The footer reports it;
   stale mode-guards re-probe before acting. See ADR-0006.
+- **envelope** — the repeated `guard → call → footer → catch` wrapper every
+  `wb_*` tool hand-rolls today. The `defineWorkbenchTool` deep module owns it for
+  the single-call tools. See ADR-0007.
+- **`defineWorkbenchTool`** — the deep module + type-inferring constructor that
+  owns the envelope. A covered tool is declared as data — `inputSchema`,
+  `validate?`, `requireMode?`, `apiFunc`, `formatter` — and exported in a `*Tools`
+  array that `registerWorkbenchTools` loops over. Covers only the **single-call**
+  Workbench tools; the orchestrators (`wb_reload`, `wb_play`/`wb_stop`,
+  `wb_launch`, `wb_diagnose`) stay hand-written. See ADR-0007.
+- **formatter** — a covered tool's pure `({ result, input }) → { text, isError? }`
+  function: renders the response body, never the footer, never touches `client`.
+  The socket-free test surface the tools layer otherwise lacks. Distinct from the
+  **footer**, which the envelope appends. See ADR-0007.
+- **`WorkbenchMode` vs `RequiredMode`** — `WorkbenchMode` (`"edit" | "play" |
+  "unknown"`) is the state the engine *is in*. `RequiredMode`
+  (`Exclude<WorkbenchMode, "unknown">`) is the mode a guard can *demand* — you
+  cannot require `"unknown"`. A `requireMode` guard returns `RequiredMode | null`.
 - **reference tools / authoring tools / Workbench tools** — the three tool
   families (see subsystem 5). Use these exact names.
 - **recipe** — a JSON definition driving prefab generation (subsystem 6). Not a

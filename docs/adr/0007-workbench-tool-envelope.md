@@ -41,6 +41,7 @@ defineWorkbenchTool({
   name, description, inputSchema,                 // ZodRawShape
   validate?:    (input) => string | null,         // pre-call usage errors; null = proceed
   requireMode?: (input) => RequiredMode | null,   // mode guard; null = no guard
+  modeAction?:  string,                           // guard-block phrase; defaults to name
   apiFunc:      (input, client) => Promise<R>,     // the I/O; may be >1 call internally
   formatter:    ({ result, input }) => { text: string; isError?: boolean },  // PURE
 })
@@ -64,6 +65,12 @@ Deliberate boundaries:
   tools write `() => "edit"`. Its return type is `RequiredMode` (see glossary) —
   the modes a guard can *demand* (`"edit" | "play"`), which is a distinct concept
   from `WorkbenchMode` (the state the engine is *in*, including `"unknown"`).
+  - **`modeAction`** is the human phrase the block message interpolates —
+    `Cannot ${modeAction} while in play mode…`. It defaults to `name`, but a
+    migrated tool sets it (`"create entity"`, `"modify entity"`) to preserve its
+    original wording, since the generic-`catch` decision below would otherwise
+    leave the block reading `Cannot wb_entity_create …` — worse than the verb the
+    hand-written handler used.
 - **`validate` is a separate hook**, run before the guard, because cross-field
   usage rules ("`name` **or** `index`"; "`value` required **iff** action ∈ {…}")
   can't be expressed in the per-field `ZodRawShape` the MCP SDK's `registerTool`

@@ -25,17 +25,17 @@ import { registerWbConnect } from "./tools/wb-connect.js";
 import { registerWbDiagnose } from "./tools/wb-diagnose.js";
 import { registerWbReload } from "./tools/wb-reload.js";
 import { registerWbEditorTools } from "./tools/wb-editor.js";
-import { registerWbExecuteAction } from "./tools/wb-execute-action.js";
+import { executeActionTools } from "./tools/wb-execute-action.js";
 import { registerWorkbenchTools } from "./workbench/define-tool.js";
 import { entityTools } from "./tools/wb-entities.js";
 import { componentTools } from "./tools/wb-components.js";
-import { registerWbTerrain } from "./tools/wb-terrain.js";
+import { terrainTools } from "./tools/wb-terrain.js";
 import { layerTools } from "./tools/wb-layers.js";
 import { resourceTools } from "./tools/wb-resources.js";
 import { prefabTools } from "./tools/wb-prefabs.js";
-import { registerWbClipboard } from "./tools/wb-clipboard.js";
-import { registerWbScriptEditor } from "./tools/wb-script-editor.js";
-import { registerWbLocalization } from "./tools/wb-localization.js";
+import { clipboardTools } from "./tools/wb-clipboard.js";
+import { scriptEditorTools } from "./tools/wb-script-editor.js";
+import { localizationTools } from "./tools/wb-localization.js";
 import { projectTools } from "./tools/wb-projects.js";
 import { validateTools } from "./tools/wb-validate.js";
 import { registerWbState } from "./tools/wb-state.js";
@@ -86,7 +86,6 @@ export function registerTools(server: McpServer, config: Config): void {
   registerWbDiagnose(server, wbClient);
   registerWbReload(server, wbClient);
   registerWbEditorTools(server, wbClient);
-  registerWbExecuteAction(server, wbClient);
   registerWorkbenchTools(server, wbClient, [
     ...entityTools,
     ...resourceTools,
@@ -95,11 +94,12 @@ export function registerTools(server: McpServer, config: Config): void {
     ...componentTools,
     ...layerTools,
     ...projectTools,
+    ...clipboardTools,
+    ...localizationTools,
+    ...terrainTools,
+    ...scriptEditorTools,
+    ...executeActionTools,
   ]);
-  registerWbTerrain(server, wbClient);
-  registerWbClipboard(server, wbClient);
-  registerWbScriptEditor(server, wbClient);
-  registerWbLocalization(server, wbClient);
   registerWbState(server, wbClient);
   registerScenarioTools(server, wbClient);
   registerScenarioCreate(server, config);

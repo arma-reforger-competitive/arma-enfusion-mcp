@@ -28,9 +28,9 @@ import { registerWbEditorTools } from "./tools/wb-editor.js";
 import { registerWbExecuteAction } from "./tools/wb-execute-action.js";
 import { registerWorkbenchTools } from "./workbench/define-tool.js";
 import { entityTools } from "./tools/wb-entities.js";
-import { registerWbComponent } from "./tools/wb-components.js";
+import { componentTools } from "./tools/wb-components.js";
 import { registerWbTerrain } from "./tools/wb-terrain.js";
-import { registerWbLayers } from "./tools/wb-layers.js";
+import { layerTools } from "./tools/wb-layers.js";
 import { resourceTools } from "./tools/wb-resources.js";
 import { prefabTools } from "./tools/wb-prefabs.js";
 import { registerWbClipboard } from "./tools/wb-clipboard.js";
@@ -92,10 +92,10 @@ export function registerTools(server: McpServer, config: Config): void {
     ...resourceTools,
     ...prefabTools,
     ...validateTools,
+    ...componentTools,
+    ...layerTools,
   ]);
-  registerWbComponent(server, wbClient);
   registerWbTerrain(server, wbClient);
-  registerWbLayers(server, wbClient);
   registerWbClipboard(server, wbClient);
   registerWbScriptEditor(server, wbClient);
   registerWbLocalization(server, wbClient);

@@ -1,7 +1,14 @@
-import type { WorkbenchClient, WorkbenchState } from "./client.js";
+import type { WorkbenchClient, WorkbenchMode, WorkbenchState } from "./client.js";
 import { STATE_TTL_MS } from "./client.js";
 
 export type DerivedStatus = "disconnected" | "connected" | "stale";
+
+/**
+ * The modes a guard can *demand* — a distinct concept from WorkbenchMode (the
+ * state the engine is *in*, which also includes "unknown"). A guard can never
+ * require "unknown", so the type system forbids it.
+ */
+export type RequiredMode = Exclude<WorkbenchMode, "unknown">;
 
 /**
  * Derive a freshness-aware status from stored state.
@@ -65,7 +72,7 @@ export async function requirePlayMode(client: WorkbenchClient, toolAction: strin
 async function requireMode(
   client: WorkbenchClient,
   toolAction: string,
-  required: "edit" | "play"
+  required: RequiredMode
 ): Promise<string | null> {
   const status = deriveStatus(client.state);
 
@@ -86,7 +93,7 @@ async function requireMode(
 function evaluateModeRule(
   mode: WorkbenchState["mode"],
   toolAction: string,
-  required: "edit" | "play"
+  required: RequiredMode
 ): string | null {
   if (required === "edit") {
     if (mode === "play") {

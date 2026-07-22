@@ -26,7 +26,8 @@ import { registerWbDiagnose } from "./tools/wb-diagnose.js";
 import { registerWbReload } from "./tools/wb-reload.js";
 import { registerWbEditorTools } from "./tools/wb-editor.js";
 import { registerWbExecuteAction } from "./tools/wb-execute-action.js";
-import { registerWbEntityTools } from "./tools/wb-entities.js";
+import { registerWorkbenchTools } from "./workbench/define-tool.js";
+import { entityTools } from "./tools/wb-entities.js";
 import { registerWbComponent } from "./tools/wb-components.js";
 import { registerWbTerrain } from "./tools/wb-terrain.js";
 import { registerWbLayers } from "./tools/wb-layers.js";
@@ -86,7 +87,7 @@ export function registerTools(server: McpServer, config: Config): void {
   registerWbReload(server, wbClient);
   registerWbEditorTools(server, wbClient);
   registerWbExecuteAction(server, wbClient);
-  registerWbEntityTools(server, wbClient);
+  registerWorkbenchTools(server, wbClient, entityTools);
   registerWbComponent(server, wbClient);
   registerWbTerrain(server, wbClient);
   registerWbLayers(server, wbClient);

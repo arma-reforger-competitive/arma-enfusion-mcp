@@ -61,9 +61,11 @@ export interface WorkbenchToolConfig<Schema extends ZodRawShape, R> {
   /**
    * Human phrase for a blocked-guard message ("Cannot <modeAction> while in
    * play mode…"). Defaults to `name`; set it to preserve a tool's original
-   * wording (e.g. "create entity" rather than "wb_entity_create").
+   * wording (e.g. "create entity" rather than "wb_entity_create"). May be a
+   * function of input for multi-action tools whose original phrase varied per
+   * action (e.g. "register resource" vs "rebuild resource").
    */
-  modeAction?: string;
+  modeAction?: string | ((input: InferInput<Schema>) => string);
   /** The I/O boundary — imperative, may make more than one call. */
   apiFunc: (input: InferInput<Schema>, client: WorkbenchClient) => Promise<R>;
   /** PURE: render the result (and echo input) to text; may flag a semantic error. */
@@ -80,7 +82,8 @@ export interface WorkbenchTool {
   name: string;
   description: string;
   inputSchema: ZodRawShape;
-  modeAction?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  modeAction?: string | ((input: any) => string);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   validate?: (input: any) => string | null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -126,7 +129,10 @@ export async function runWorkbenchTool(
     if (tool.requireMode) {
       const required = tool.requireMode(input);
       if (required) {
-        const action = tool.modeAction ?? tool.name;
+        const action =
+          typeof tool.modeAction === "function"
+            ? tool.modeAction(input)
+            : tool.modeAction ?? tool.name;
         const block =
           required === "edit"
             ? await requireEditMode(client, action)

@@ -91,6 +91,24 @@ describe("runWorkbenchTool — envelope orchestration", () => {
     expect(res.content[0].text).not.toContain("wb_entity_create");
   });
 
+  it("resolves a function modeAction against the input for the guard phrase", async () => {
+    const tool = defineWorkbenchTool({
+      name: "wb_resources",
+      description: "d",
+      inputSchema: { action: z.enum(["register", "rebuild"]) },
+      requireMode: () => "edit",
+      modeAction: ({ action }) => `${action} resource`,
+      apiFunc: async () => ({}),
+      formatter: () => ({ text: "unreached" }),
+    });
+
+    const register = await runWorkbenchTool(tool, { action: "register" }, fakeClient({ mode: "play" }));
+    expect(register.content[0].text).toContain("Cannot register resource while in play mode");
+
+    const rebuild = await runWorkbenchTool(tool, { action: "rebuild" }, fakeClient({ mode: "play" }));
+    expect(rebuild.content[0].text).toContain("Cannot rebuild resource while in play mode");
+  });
+
   it("falls back to the tool name when modeAction is omitted", async () => {
     const tool = defineWorkbenchTool({
       name: "wb_thing",

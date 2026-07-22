@@ -31,13 +31,13 @@ import { entityTools } from "./tools/wb-entities.js";
 import { registerWbComponent } from "./tools/wb-components.js";
 import { registerWbTerrain } from "./tools/wb-terrain.js";
 import { registerWbLayers } from "./tools/wb-layers.js";
-import { registerWbResources } from "./tools/wb-resources.js";
-import { registerWbPrefabs } from "./tools/wb-prefabs.js";
+import { resourceTools } from "./tools/wb-resources.js";
+import { prefabTools } from "./tools/wb-prefabs.js";
 import { registerWbClipboard } from "./tools/wb-clipboard.js";
 import { registerWbScriptEditor } from "./tools/wb-script-editor.js";
 import { registerWbLocalization } from "./tools/wb-localization.js";
 import { registerWbProjects } from "./tools/wb-projects.js";
-import { registerWbValidate } from "./tools/wb-validate.js";
+import { validateTools } from "./tools/wb-validate.js";
 import { registerWbState } from "./tools/wb-state.js";
 import { registerGameBrowse } from "./tools/game-browse.js";
 import { registerGameRead } from "./tools/game-read.js";
@@ -87,17 +87,19 @@ export function registerTools(server: McpServer, config: Config): void {
   registerWbReload(server, wbClient);
   registerWbEditorTools(server, wbClient);
   registerWbExecuteAction(server, wbClient);
-  registerWorkbenchTools(server, wbClient, entityTools);
+  registerWorkbenchTools(server, wbClient, [
+    ...entityTools,
+    ...resourceTools,
+    ...prefabTools,
+    ...validateTools,
+  ]);
   registerWbComponent(server, wbClient);
   registerWbTerrain(server, wbClient);
   registerWbLayers(server, wbClient);
-  registerWbResources(server, wbClient);
-  registerWbPrefabs(server, wbClient);
   registerWbClipboard(server, wbClient);
   registerWbScriptEditor(server, wbClient);
   registerWbLocalization(server, wbClient);
   registerWbProjects(server, wbClient);
-  registerWbValidate(server, wbClient);
   registerWbState(server, wbClient);
   registerScenarioTools(server, wbClient);
   registerScenarioCreate(server, config);

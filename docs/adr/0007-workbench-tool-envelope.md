@@ -70,7 +70,11 @@ Deliberate boundaries:
     migrated tool sets it (`"create entity"`, `"modify entity"`) to preserve its
     original wording, since the generic-`catch` decision below would otherwise
     leave the block reading `Cannot wb_entity_create …` — worse than the verb the
-    hand-written handler used.
+    hand-written handler used. It may itself be a **function of input** (`string |
+    (input) => string`), because a multi-action tool's original phrase varied per
+    action — `wb_resources` said "register resource" vs "rebuild resource",
+    `wb_prefabs` said "create template" vs "save prefab" — which one static string
+    cannot preserve (added during the T1 asset/resource migration).
 - **`validate` is a separate hook**, run before the guard, because cross-field
   usage rules ("`name` **or** `index`"; "`value` required **iff** action ∈ {…}")
   can't be expressed in the per-field `ZodRawShape` the MCP SDK's `registerTool`
@@ -106,6 +110,11 @@ Also fold the two inline `"edit" | "play"` copies in `status.ts` into the named
   is really four (`validate` exists in the code today regardless). The coverage
   boundary — "single-call tools only" — is a fact you must *know*, not one the
   type system enforces; the orchestration tools stay bespoke by design.
+- **Footer drift corrected:** because the envelope appends the footer on *every*
+  return path, migrating a tool can *add* the footer where the hand-written
+  handler forgot it — `wb_prefabs`'s `getAncestor` branch and its usage-error
+  returns previously omitted `formatConnectionStatus`; they now carry it. This is
+  the drift the envelope exists to eliminate (user story 3/15), not a regression.
 - Migration is mechanical and per-file; each `registerWb*Tools` function becomes
   an exported `*Tools` array, and `server.ts` swaps ~15 calls for one
   concatenated list plus one `registerWorkbenchTools` call.

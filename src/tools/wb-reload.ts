@@ -8,6 +8,15 @@ import {
 import { formatConnectionStatus } from "../workbench/status.js";
 import { sleep, renderError } from "../workbench/tool-helpers.js";
 
+/**
+ * wb_reload — reload scripts or plugins in the running Workbench.
+ *
+ * Left hand-written (not migrated to defineWorkbenchTool, ADR-0007): the reload
+ * drops the socket while Workbench recompiles, so the tool polls until the
+ * connection comes back (RELOAD_CONFIRM_TIMEOUT_MS) and reports whether the
+ * handshake was confirmed. That poll loop is the orchestration shape the
+ * envelope's "guard → call(s) → format once → footer → catch" does not cover.
+ */
 export function registerWbReload(server: McpServer, client: WorkbenchClient): void {
   server.registerTool(
     "wb_reload",

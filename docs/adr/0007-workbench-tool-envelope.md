@@ -1,0 +1,150 @@
+# 7. A deep envelope for single-call Workbench tools (`defineWorkbenchTool`)
+
+Date: 2026-07-22
+Status: Accepted
+
+## Context
+
+Every `wb_*` tool re-implements the same shape by hand: an optional mode guard,
+a `try`, one `client.call`, result formatting, a `formatConnectionStatus`
+footer, and a `catch`. Measured across `src/tools/wb-*.ts`: 153 manual
+envelopes, 122 footer appends, 126 `isError` flags, 30 mode guards — and **0
+tests on the handlers**. The envelope fills roughly two-thirds of every tool;
+the unique work is a thin sliver.
+
+Two concrete costs, both visible in the code today:
+
+- **The fallible logic is untestable.** The part that actually rots — output
+  formatting, e.g. `wb_entity_modify`'s 14-branch action-label table
+  (`wb-entities.ts:361`) — is welded to I/O inside the handler, after
+  `await client.call`. Testing it needs a live socket, a running Workbench, and
+  mode state. So it is never tested.
+- **The error envelope has drifted.** `tool-helpers.ts` exports `renderError`,
+  which prefers the classified connectivity hint (`WorkbenchError.hint`). Only 4
+  files use it; 26 catch sites inline the raw `e instanceof Error ? e.message
+  : String(e)` fallback and never surface the hint. The same connectivity
+  failure reads differently depending on which tool hit it.
+
+## Decision
+
+Introduce a deep module, `defineWorkbenchTool`, that owns the envelope. It
+covers **only the single-call tools** (the ~40 that genuinely are `guard → one
+call → format → footer → catch`). Orchestration tools with their own control
+flow — `wb_reload` (poll loop + `markStale`), `wb_play`/`wb_stop`
+(probe-after-mutate), `wb_launch`, `wb_diagnose` — **stay hand-written**; an
+abstraction earns its keep on the common case, not by swallowing the outliers.
+
+Each covered tool is declared as **data** with these parts:
+
+```ts
+defineWorkbenchTool({
+  name, description, inputSchema,                 // ZodRawShape
+  validate?:    (input) => string | null,         // pre-call usage errors; null = proceed
+  requireMode?: (input) => RequiredMode | null,   // mode guard; null = no guard
+  modeAction?:  string,                           // guard-block phrase; defaults to name
+  apiFunc:      (input, client) => Promise<R>,     // the I/O; may be >1 call internally
+  formatter:    ({ result, input }) => { text: string; isError?: boolean },  // PURE
+})
+```
+
+Deliberate boundaries:
+
+- **The `formatter` is pure** — `({ result, input }) → { text, isError? }`, no
+  `client`. This is the whole point: the fallible formatting becomes a function
+  testable with a plain object and a string assertion, no Workbench. `client`
+  stays in the envelope, which owns the footer; letting the formatter touch
+  `client` would re-weld it to live state and forfeit the win.
+  - `input` is required because many formatters echo the caller's arguments back
+    (`wb_entity_create` renders `input.prefab`/`position`, not just `result`).
+  - `formatter` returns `{ text, isError? }` because a *successful* call can be
+    semantically an error (`getSelected` with an empty list is `isError`, while
+    `listProperties` empty is not) — so `isError` can't be equated with "the
+    `catch` block".
+- **The guard is a function of input**, not a static declaration, because
+  `wb_entity_modify` requires edit mode only for its mutating actions. Static
+  tools write `() => "edit"`. Its return type is `RequiredMode` (see glossary) —
+  the modes a guard can *demand* (`"edit" | "play"`), which is a distinct concept
+  from `WorkbenchMode` (the state the engine is *in*, including `"unknown"`).
+  - **`modeAction`** is the human phrase the block message interpolates —
+    `Cannot ${modeAction} while in play mode…`. It defaults to `name`, but a
+    migrated tool sets it (`"create entity"`, `"modify entity"`) to preserve its
+    original wording, since the generic-`catch` decision below would otherwise
+    leave the block reading `Cannot wb_entity_create …` — worse than the verb the
+    hand-written handler used. It may itself be a **function of input** (`string |
+    (input) => string`), because a multi-action tool's original phrase varied per
+    action — `wb_resources` said "register resource" vs "rebuild resource",
+    `wb_prefabs` said "create template" vs "save prefab" — which one static string
+    cannot preserve (added during the T1 asset/resource migration).
+- **`validate` is a separate hook**, run before the guard, because cross-field
+  usage rules ("`name` **or** `index`"; "`value` required **iff** action ∈ {…}")
+  can't be expressed in the per-field `ZodRawShape` the MCP SDK's `registerTool`
+  requires, and shouldn't be conflated with runtime failures in the `catch`.
+- **`apiFunc` is imperative** (`(input, client) => Promise<R>`), not a
+  declarative `method + buildParams`, because param-building is too varied and
+  covered tools may still make more than one call. It is the I/O boundary and is
+  not expected to be pure.
+- **The `catch` is generic**: `Error: ${renderError(e)}`. The verbose per-tool
+  prefix ("creating entity", the embedded name) is redundant — the caller already
+  knows the tool and input it invoked. Dropping it costs nothing and gives all
+  ~40 tools the `renderError` hint they were silently dropping.
+- **`defineWorkbenchTool` is a type-inferring constructor**: it infers the input
+  type `I` from `inputSchema` via `z.infer`, type-checks that tool's
+  `validate`/`requireMode`/`apiFunc`/`formatter` against `I` at construction, and
+  returns an erased element. Tools are exported as arrays of these elements
+  (`export const entityTools = [...]`); a separate `registerWorkbenchTools(server,
+  client, tools)` does the registration loop. This keeps per-tool input types
+  alive *inside* the formatters (where tests and correctness depend on them)
+  while the array stays homogeneous for storage.
+
+Also fold the two inline `"edit" | "play"` copies in `status.ts` into the named
+`RequiredMode`.
+
+## Consequences
+
+- **Good:** the formatting logic — the fallible part — becomes ~40 pure
+  functions with a socket-free test surface, turning the `0 tests` metric
+  actionable. Envelope bugs (footer, error rendering) concentrate in one module
+  and can't drift tool-to-tool; every covered tool gains the `renderError` hint.
+- **Bad / accepted:** 26 tools' error text changes from `Error <verb>: …` to
+  `Error: …` (redundant → concise). The "just three parts" story from the review
+  is really four (`validate` exists in the code today regardless). The coverage
+  boundary — "single-call tools only" — is a fact you must *know*, not one the
+  type system enforces; the orchestration tools stay bespoke by design.
+- **Footer drift corrected:** because the envelope appends the footer on *every*
+  return path, migrating a tool can *add* the footer where the hand-written
+  handler forgot it — `wb_prefabs`'s `getAncestor` branch and its usage-error
+  returns previously omitted `formatConnectionStatus`; they now carry it. This is
+  the drift the envelope exists to eliminate (user story 3/15), not a regression.
+- Migration is mechanical and per-file; each `registerWb*Tools` function becomes
+  an exported `*Tools` array, and `server.ts` swaps ~15 calls for one
+  concatenated list plus one `registerWorkbenchTools` call.
+
+## Realised coverage boundary
+
+Migration is complete. Fifteen `*Tools` arrays flow through the single
+`registerWorkbenchTools` call in `server.ts`. Seven tools stayed hand-written,
+each carrying a module docstring saying why:
+
+| Tool | Why it stayed bespoke |
+| --- | --- |
+| `wb_reload` | poll loop over the reload handshake |
+| `wb_play`, `wb_stop` (`wb-editor.ts`) | `confirmMode` polling after the mode switch |
+| `wb_launch` | process spawn + provisioning side effects |
+| `wb_diagnose` | multi-probe report where a failed probe is evidence, not an error |
+| `wb_scenario` | ~15-call orchestration, mid-flight warning accumulation, rollback rendered into the error path |
+| `wb_entity_duplicate` | filesystem side effects interleaved with per-step partial-success formatting |
+| `wb_knowledge` | zero Workbench calls — holds no client and wants neither guard nor footer |
+
+The count is tools, not modules: `wb-editor.ts` holds two of them. Its other
+three tools (`wb_save`, `wb_undo_redo`, `wb_open_resource`) were plain
+single-call tools that had simply been carried along in the same file; they now
+live in `wb-editor-actions.ts` inside the envelope, so the module boundary
+matches the coverage boundary.
+
+Two covered tools use the same wrinkle: where a *failure* is really the tool's
+answer, `apiFunc` catches it and returns a discriminated outcome so the formatter
+can render it. `wb_connect`'s `ProbeOutcome` keeps `**Connection Failed**` (with
+`isError`) instead of the generic `Error: …`, and `wb_save`'s `SaveOutcome` keeps
+`**Save Pending**` (without `isError`) for the modal-dialog timeout. Both
+failure texts become testable branches like any other; anything the `apiFunc`
+does not claim still falls through to the envelope's `catch`.

@@ -16,6 +16,13 @@ import { requireEditMode, formatConnectionStatus } from "../workbench/status.js"
 /**
  * wb_entity_duplicate — duplicate a scene entity into the mod folder.
  *
+ * Left hand-written (not migrated to defineWorkbenchTool, T2/#24): this is a
+ * multi-call orchestration with filesystem side-effects (read/copy the source
+ * .et, write the .meta) interleaved with formatting — it renders distinct
+ * partial-success messages at every step, so it has no single pure `formatter`
+ * seam the envelope's "guard → call(s) → format once → footer → catch" shape
+ * assumes.
+ *
  * Workflow:
  *   1. Ask Workbench for the entity's ancestor prefab path (e.g. "{GUID}Prefabs/Vehicles/...")
  *   2. Find that file in the game's loose files and copy it to destPath in the mod

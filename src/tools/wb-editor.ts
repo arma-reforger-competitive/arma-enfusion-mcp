@@ -34,6 +34,16 @@ async function confirmMode(
   }
 }
 
+/**
+ * wb_play / wb_stop — switch Workbench between edit and play mode.
+ *
+ * Left hand-written (not migrated to defineWorkbenchTool, ADR-0007): both poll
+ * `confirmMode` after the switch, because EMCP_WB_EditorControl carries no
+ * `mode` and the transition must be confirmed out-of-band. That poll loop is the
+ * orchestration shape the envelope deliberately does not cover. The three
+ * single-call editor actions that used to live here (`wb_save`, `wb_undo_redo`,
+ * `wb_open_resource`) now sit in `wb-editor-actions.ts` inside the envelope.
+ */
 export function registerWbEditorTools(server: McpServer, client: WorkbenchClient): void {
   // wb_play — Switch to game mode (Play in Editor)
   server.registerTool(
@@ -160,139 +170,6 @@ export function registerWbEditorTools(server: McpServer, client: WorkbenchClient
         return {
           content: [{ type: "text" as const, text: `Error stopping play mode: ${renderError(e)}${formatConnectionStatus(client)}` }],
           isError: true,
-        };
-      }
-    }
-  );
-
-  // wb_save — Save the current world
-  server.registerTool(
-    "wb_save",
-    {
-      description:
-        "Save the current world in the World Editor. Optionally save to a new path (Save As). Only works in edit mode.",
-      inputSchema: {
-        path: z
-          .string()
-          .optional()
-          .describe("File path for Save As. Omit to save to the current file."),
-      },
-    },
-    async ({ path }) => {
-      const modeErr = await requireEditMode(client, "save");
-      if (modeErr) {
-        return { content: [{ type: "text" as const, text: modeErr + formatConnectionStatus(client) }] };
-      }
-      try {
-        const params: Record<string, unknown> = {
-          action: path ? "saveAs" : "save",
-        };
-        if (path) params.path = path;
-
-        // Save can open a modal dialog for unsaved worlds — use longer timeout
-        const result = await client.call<Record<string, unknown>>(
-          "EMCP_WB_EditorControl",
-          params,
-          { timeout: 30_000 }
-        );
-
-        const label = path ? `Saved as: ${path}` : "World saved.";
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `**Save Complete**\n\n${label}${result.message ? `\n${result.message}` : ""}${formatConnectionStatus(client)}`,
-            },
-          ],
-        };
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        if (msg.includes("timed out")) {
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: `**Save Pending** — Workbench opened a save dialog that requires user confirmation. The world will be saved once the user clicks OK in Workbench. This is normal for worlds that haven't been saved before.${formatConnectionStatus(client)}`,
-              },
-            ],
-          };
-        }
-        return {
-          content: [{ type: "text" as const, text: `Error saving: ${msg}${formatConnectionStatus(client)}` }],
-        isError: true,
-        };
-      }
-    }
-  );
-
-  // wb_undo_redo — Undo or redo
-  server.registerTool(
-    "wb_undo_redo",
-    {
-      description: "Undo or redo the last action in the World Editor.",
-      inputSchema: {
-        action: z
-          .enum(["undo", "redo"])
-          .describe("Whether to undo or redo"),
-      },
-    },
-    async ({ action }) => {
-      try {
-        const result = await client.call<Record<string, unknown>>("EMCP_WB_EditorControl", {
-          action,
-        });
-
-        const label = action === "undo" ? "Undo" : "Redo";
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `**${label} Complete**${result.message ? `\n\n${result.message}` : ""}${formatConnectionStatus(client)}`,
-            },
-          ],
-        };
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        return {
-          content: [{ type: "text" as const, text: `Error performing ${action}: ${msg}${formatConnectionStatus(client)}` }],
-        isError: true,
-        };
-      }
-    }
-  );
-
-  // wb_open_resource — Open a resource in Workbench
-  server.registerTool(
-    "wb_open_resource",
-    {
-      description:
-        "Open a resource file in the appropriate Workbench editor (e.g., a .et prefab in the Prefab Editor, a .c script in the Script Editor).",
-      inputSchema: {
-        path: z
-          .string()
-          .describe("Resource path to open (e.g., 'Prefabs/Weapons/AK47.et', 'Scripts/Game/MyScript.c')"),
-      },
-    },
-    async ({ path }) => {
-      try {
-        const result = await client.call<Record<string, unknown>>("EMCP_WB_EditorControl", {
-          action: "openResource",
-          path,
-        });
-
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `**Resource Opened**\n\nOpened: ${path}${result.message ? `\n${result.message}` : ""}${formatConnectionStatus(client)}`,
-            },
-          ],
-        };
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        return {
-          content: [{ type: "text" as const, text: `Error opening resource: ${msg}${formatConnectionStatus(client)}` }],
-        isError: true,
         };
       }
     }

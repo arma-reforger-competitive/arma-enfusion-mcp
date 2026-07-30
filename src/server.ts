@@ -21,23 +21,25 @@ import { SearchEngine } from "./index/search-engine.js";
 import { PatternLibrary } from "./patterns/loader.js";
 import { WorkbenchClient } from "./workbench/client.js";
 import { registerWbLaunch } from "./tools/wb-launch.js";
-import { registerWbConnect } from "./tools/wb-connect.js";
+import { connectTools } from "./tools/wb-connect.js";
 import { registerWbDiagnose } from "./tools/wb-diagnose.js";
 import { registerWbReload } from "./tools/wb-reload.js";
 import { registerWbEditorTools } from "./tools/wb-editor.js";
-import { registerWbExecuteAction } from "./tools/wb-execute-action.js";
-import { registerWbEntityTools } from "./tools/wb-entities.js";
-import { registerWbComponent } from "./tools/wb-components.js";
-import { registerWbTerrain } from "./tools/wb-terrain.js";
-import { registerWbLayers } from "./tools/wb-layers.js";
-import { registerWbResources } from "./tools/wb-resources.js";
-import { registerWbPrefabs } from "./tools/wb-prefabs.js";
-import { registerWbClipboard } from "./tools/wb-clipboard.js";
-import { registerWbScriptEditor } from "./tools/wb-script-editor.js";
-import { registerWbLocalization } from "./tools/wb-localization.js";
-import { registerWbProjects } from "./tools/wb-projects.js";
-import { registerWbValidate } from "./tools/wb-validate.js";
-import { registerWbState } from "./tools/wb-state.js";
+import { editorActionTools } from "./tools/wb-editor-actions.js";
+import { executeActionTools } from "./tools/wb-execute-action.js";
+import { registerWorkbenchTools } from "./workbench/define-tool.js";
+import { entityTools } from "./tools/wb-entities.js";
+import { componentTools } from "./tools/wb-components.js";
+import { terrainTools } from "./tools/wb-terrain.js";
+import { layerTools } from "./tools/wb-layers.js";
+import { resourceTools } from "./tools/wb-resources.js";
+import { prefabTools } from "./tools/wb-prefabs.js";
+import { clipboardTools } from "./tools/wb-clipboard.js";
+import { scriptEditorTools } from "./tools/wb-script-editor.js";
+import { localizationTools } from "./tools/wb-localization.js";
+import { projectTools } from "./tools/wb-projects.js";
+import { validateTools } from "./tools/wb-validate.js";
+import { stateTools } from "./tools/wb-state.js";
 import { registerGameBrowse } from "./tools/game-browse.js";
 import { registerGameRead } from "./tools/game-read.js";
 import { registerAssetSearch } from "./tools/asset-search.js";
@@ -80,24 +82,30 @@ export function registerTools(server: McpServer, config: Config): void {
     config.workbenchPort,
     config
   );
+  // Orchestration tools stay hand-written (poll loops / side effects) and
+  // register themselves; see ADR-0007's coverage boundary.
   registerWbLaunch(server, config, wbClient);
-  registerWbConnect(server, wbClient);
   registerWbDiagnose(server, wbClient);
   registerWbReload(server, wbClient);
   registerWbEditorTools(server, wbClient);
-  registerWbExecuteAction(server, wbClient);
-  registerWbEntityTools(server, wbClient);
-  registerWbComponent(server, wbClient);
-  registerWbTerrain(server, wbClient);
-  registerWbLayers(server, wbClient);
-  registerWbResources(server, wbClient);
-  registerWbPrefabs(server, wbClient);
-  registerWbClipboard(server, wbClient);
-  registerWbScriptEditor(server, wbClient);
-  registerWbLocalization(server, wbClient);
-  registerWbProjects(server, wbClient);
-  registerWbValidate(server, wbClient);
-  registerWbState(server, wbClient);
+  // Every covered wb_* tool — one greppable list, one envelope.
+  registerWorkbenchTools(server, wbClient, [
+    ...entityTools,
+    ...resourceTools,
+    ...prefabTools,
+    ...validateTools,
+    ...componentTools,
+    ...layerTools,
+    ...projectTools,
+    ...clipboardTools,
+    ...localizationTools,
+    ...terrainTools,
+    ...scriptEditorTools,
+    ...executeActionTools,
+    ...stateTools,
+    ...connectTools,
+    ...editorActionTools,
+  ]);
   registerScenarioTools(server, wbClient);
   registerScenarioCreate(server, config);
 

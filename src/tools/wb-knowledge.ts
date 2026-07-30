@@ -12,6 +12,16 @@ const KB_DIR = resolve(
   "kb"
 );
 
+/**
+ * wb_knowledge — search the bundled modding knowledge base.
+ *
+ * Left hand-written (evaluated and deliberately excluded from
+ * defineWorkbenchTool, T5/#27): despite the `wb_` prefix this tool makes **zero
+ * Workbench calls** and holds no `WorkbenchClient`. It wants neither the mode
+ * guard nor the connection footer — appending "Workbench: …" to a static
+ * file-system lookup would assert a connection the tool never probed. Its only
+ * failure mode is a filesystem read, which the MCP SDK surfaces on its own.
+ */
 export function registerWbKnowledge(server: McpServer): void {
   server.registerTool(
     "wb_knowledge",

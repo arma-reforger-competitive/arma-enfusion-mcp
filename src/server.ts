@@ -21,7 +21,7 @@ import { SearchEngine } from "./index/search-engine.js";
 import { PatternLibrary } from "./patterns/loader.js";
 import { WorkbenchClient } from "./workbench/client.js";
 import { registerWbLaunch } from "./tools/wb-launch.js";
-import { registerWbConnect } from "./tools/wb-connect.js";
+import { connectTools } from "./tools/wb-connect.js";
 import { registerWbDiagnose } from "./tools/wb-diagnose.js";
 import { registerWbReload } from "./tools/wb-reload.js";
 import { registerWbEditorTools } from "./tools/wb-editor.js";
@@ -38,7 +38,7 @@ import { scriptEditorTools } from "./tools/wb-script-editor.js";
 import { localizationTools } from "./tools/wb-localization.js";
 import { projectTools } from "./tools/wb-projects.js";
 import { validateTools } from "./tools/wb-validate.js";
-import { registerWbState } from "./tools/wb-state.js";
+import { stateTools } from "./tools/wb-state.js";
 import { registerGameBrowse } from "./tools/game-browse.js";
 import { registerGameRead } from "./tools/game-read.js";
 import { registerAssetSearch } from "./tools/asset-search.js";
@@ -81,11 +81,13 @@ export function registerTools(server: McpServer, config: Config): void {
     config.workbenchPort,
     config
   );
+  // Orchestration tools stay hand-written (poll loops / side effects) and
+  // register themselves; see ADR-0007's coverage boundary.
   registerWbLaunch(server, config, wbClient);
-  registerWbConnect(server, wbClient);
   registerWbDiagnose(server, wbClient);
   registerWbReload(server, wbClient);
   registerWbEditorTools(server, wbClient);
+  // Every covered wb_* tool — one greppable list, one envelope.
   registerWorkbenchTools(server, wbClient, [
     ...entityTools,
     ...resourceTools,
@@ -99,8 +101,9 @@ export function registerTools(server: McpServer, config: Config): void {
     ...terrainTools,
     ...scriptEditorTools,
     ...executeActionTools,
+    ...stateTools,
+    ...connectTools,
   ]);
-  registerWbState(server, wbClient);
   registerScenarioTools(server, wbClient);
   registerScenarioCreate(server, config);
 

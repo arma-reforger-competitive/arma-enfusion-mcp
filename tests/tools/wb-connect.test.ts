@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { connectTools } from "../../src/tools/wb-connect.js";
 import { runWorkbenchTool } from "../../src/workbench/define-tool.js";
-import { WorkbenchClient, WorkbenchError, type WorkbenchState } from "../../src/workbench/client.js";
+import { WorkbenchError } from "../../src/workbench/client.js";
+import { fakeClient, FOOTER } from "../workbench/fake-client.js";
 
 const t = connectTools[0];
 
@@ -45,28 +46,18 @@ describe("wb_connect — formatter", () => {
   });
 });
 
-/** A fake client whose probe outcome is scripted (no socket). */
-function fakeClient(call: () => Promise<unknown>): WorkbenchClient {
-  const state: WorkbenchState = { connected: true, mode: "edit", lastUpdated: Date.now() };
-  return { state, call } as unknown as WorkbenchClient;
-}
-
 describe("wb_connect — through the envelope", () => {
   it("reports a probe failure as its own answer rather than a generic Error", async () => {
     const err = new WorkbenchError("ECONNREFUSED", "CONNECTION_REFUSED");
     err.hint = "Workbench not reachable. Run `wb_launch`.";
 
-    const res = await runWorkbenchTool(
-      t,
-      {},
-      fakeClient(() => Promise.reject(err))
-    );
+    const res = await runWorkbenchTool(t, {}, fakeClient({ call: () => Promise.reject(err) }));
 
     // apiFunc catches, so the envelope's generic `Error: …` prefix never appears.
     expect(res.content[0].text).toContain("**Connection Failed**");
     expect(res.content[0].text).toContain("Workbench not reachable. Run `wb_launch`.");
     expect(res.content[0].text).not.toContain("Error: ");
-    expect(res.content[0].text).toContain("Workbench:");
+    expect(res.content[0].text).toContain(FOOTER);
     expect(res.isError).toBe(true);
   });
 
@@ -74,10 +65,10 @@ describe("wb_connect — through the envelope", () => {
     const res = await runWorkbenchTool(
       t,
       {},
-      fakeClient(() => Promise.resolve({ mode: "play" }))
+      fakeClient({ call: () => Promise.resolve({ mode: "play" }) })
     );
     expect(res.content[0].text).toContain("**Workbench Connected**");
-    expect(res.content[0].text).toContain("Workbench:");
+    expect(res.content[0].text).toContain(FOOTER);
     expect(res.isError).toBeUndefined();
   });
 });

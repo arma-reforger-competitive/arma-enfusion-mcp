@@ -1,7 +1,7 @@
 # 7. A deep envelope for single-call Workbench tools (`defineWorkbenchTool`)
 
 Date: 2026-07-22
-Status: Proposed
+Status: Accepted
 
 ## Context
 
@@ -118,3 +118,33 @@ Also fold the two inline `"edit" | "play"` copies in `status.ts` into the named
 - Migration is mechanical and per-file; each `registerWb*Tools` function becomes
   an exported `*Tools` array, and `server.ts` swaps ~15 calls for one
   concatenated list plus one `registerWorkbenchTools` call.
+
+## Realised coverage boundary
+
+Migration is complete. Fifteen `*Tools` arrays flow through the single
+`registerWorkbenchTools` call in `server.ts`. Seven tools stayed hand-written,
+each carrying a module docstring saying why:
+
+| Tool | Why it stayed bespoke |
+| --- | --- |
+| `wb_reload` | poll loop over the reload handshake |
+| `wb_play`, `wb_stop` (`wb-editor.ts`) | `confirmMode` polling after the mode switch |
+| `wb_launch` | process spawn + provisioning side effects |
+| `wb_diagnose` | multi-probe report where a failed probe is evidence, not an error |
+| `wb_scenario` | ~15-call orchestration, mid-flight warning accumulation, rollback rendered into the error path |
+| `wb_entity_duplicate` | filesystem side effects interleaved with per-step partial-success formatting |
+| `wb_knowledge` | zero Workbench calls — holds no client and wants neither guard nor footer |
+
+The count is tools, not modules: `wb-editor.ts` holds two of them. Its other
+three tools (`wb_save`, `wb_undo_redo`, `wb_open_resource`) were plain
+single-call tools that had simply been carried along in the same file; they now
+live in `wb-editor-actions.ts` inside the envelope, so the module boundary
+matches the coverage boundary.
+
+Two covered tools use the same wrinkle: where a *failure* is really the tool's
+answer, `apiFunc` catches it and returns a discriminated outcome so the formatter
+can render it. `wb_connect`'s `ProbeOutcome` keeps `**Connection Failed**` (with
+`isError`) instead of the generic `Error: …`, and `wb_save`'s `SaveOutcome` keeps
+`**Save Pending**` (without `isError`) for the modal-dialog timeout. Both
+failure texts become testable branches like any other; anything the `apiFunc`
+does not claim still falls through to the envelope's `catch`.

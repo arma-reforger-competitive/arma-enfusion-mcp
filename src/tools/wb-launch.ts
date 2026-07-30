@@ -7,6 +7,14 @@ import type { WorkbenchClient } from "../workbench/client.js";
 import { formatConnectionStatus } from "../workbench/status.js";
 import { normalizeOsPath } from "../utils/wsl-path.js";
 
+/**
+ * wb_launch — start Workbench (and provision the bridge plugin) from the MCP.
+ *
+ * Left hand-written (not migrated to defineWorkbenchTool, ADR-0007): it spawns a
+ * process and touches the filesystem before any Workbench call exists to make,
+ * then waits for the new instance to connect. Side effects and a wait loop, not
+ * "guard → call(s) → format once → footer → catch".
+ */
 export function registerWbLaunch(
   server: McpServer,
   config: Config,

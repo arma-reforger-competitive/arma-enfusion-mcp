@@ -4,21 +4,8 @@ import {
   defineWorkbenchTool,
   runWorkbenchTool,
 } from "../../src/workbench/define-tool.js";
-import { WorkbenchClient, WorkbenchError, type WorkbenchState } from "../../src/workbench/client.js";
-
-/** A fake client exposing a fixed, fresh cached state (no socket, no probe). */
-function fakeClient(state: Partial<WorkbenchState> = {}): WorkbenchClient {
-  const full: WorkbenchState = {
-    connected: true,
-    mode: "edit",
-    lastUpdated: Date.now(),
-    ...state,
-  };
-  return { state: full } as unknown as WorkbenchClient;
-}
-
-/** The connection footer the envelope appends to every response. */
-const FOOTER = "Workbench:";
+import { WorkbenchError } from "../../src/workbench/client.js";
+import { fakeClient, FOOTER } from "./fake-client.js";
 
 describe("runWorkbenchTool — envelope orchestration", () => {
   it("runs validate → apiFunc → formatter and appends the footer on success", async () => {
@@ -68,7 +55,7 @@ describe("runWorkbenchTool — envelope orchestration", () => {
     });
 
     // Fresh play mode → an edit-mode guard blocks.
-    const res = await runWorkbenchTool(tool, {}, fakeClient({ mode: "play" }));
+    const res = await runWorkbenchTool(tool, {}, fakeClient({ state: { mode: "play" } }));
     expect(apiFunc).not.toHaveBeenCalled();
     expect(res.content[0].text).toContain("play mode");
     expect(res.content[0].text).toContain(FOOTER);
@@ -86,7 +73,7 @@ describe("runWorkbenchTool — envelope orchestration", () => {
       formatter: () => ({ text: "unreached" }),
     });
 
-    const res = await runWorkbenchTool(tool, {}, fakeClient({ mode: "play" }));
+    const res = await runWorkbenchTool(tool, {}, fakeClient({ state: { mode: "play" } }));
     expect(res.content[0].text).toContain("Cannot create entity while in play mode");
     expect(res.content[0].text).not.toContain("wb_entity_create");
   });
@@ -102,10 +89,10 @@ describe("runWorkbenchTool — envelope orchestration", () => {
       formatter: () => ({ text: "unreached" }),
     });
 
-    const register = await runWorkbenchTool(tool, { action: "register" }, fakeClient({ mode: "play" }));
+    const register = await runWorkbenchTool(tool, { action: "register" }, fakeClient({ state: { mode: "play" } }));
     expect(register.content[0].text).toContain("Cannot register resource while in play mode");
 
-    const rebuild = await runWorkbenchTool(tool, { action: "rebuild" }, fakeClient({ mode: "play" }));
+    const rebuild = await runWorkbenchTool(tool, { action: "rebuild" }, fakeClient({ state: { mode: "play" } }));
     expect(rebuild.content[0].text).toContain("Cannot rebuild resource while in play mode");
   });
 
@@ -119,7 +106,7 @@ describe("runWorkbenchTool — envelope orchestration", () => {
       formatter: () => ({ text: "unreached" }),
     });
 
-    const res = await runWorkbenchTool(tool, {}, fakeClient({ mode: "play" }));
+    const res = await runWorkbenchTool(tool, {}, fakeClient({ state: { mode: "play" } }));
     expect(res.content[0].text).toContain("Cannot wb_thing while in play mode");
   });
 
@@ -134,7 +121,7 @@ describe("runWorkbenchTool — envelope orchestration", () => {
       formatter: () => ({ text: "did it" }),
     });
 
-    const res = await runWorkbenchTool(tool, {}, fakeClient({ mode: "edit" }));
+    const res = await runWorkbenchTool(tool, {}, fakeClient({ state: { mode: "edit" } }));
     expect(apiFunc).toHaveBeenCalledOnce();
     expect(res.content[0].text).toContain("did it");
   });
@@ -150,7 +137,7 @@ describe("runWorkbenchTool — envelope orchestration", () => {
       formatter: () => ({ text: "ran" }),
     });
 
-    const res = await runWorkbenchTool(tool, {}, fakeClient({ mode: "play" }));
+    const res = await runWorkbenchTool(tool, {}, fakeClient({ state: { mode: "play" } }));
     expect(apiFunc).toHaveBeenCalledOnce();
     expect(res.content[0].text).toContain("ran");
   });
@@ -219,7 +206,7 @@ describe("runWorkbenchTool — envelope orchestration", () => {
       formatter: () => ({ text: "body" }),
     });
 
-    const res = await runWorkbenchTool(tool, {}, fakeClient({ connected: false, mode: "unknown" }));
+    const res = await runWorkbenchTool(tool, {}, fakeClient({ state: { connected: false, mode: "unknown" } }));
     expect(res.content[0].text).toContain("body");
     expect(res.content[0].text).toContain("Workbench: disconnected");
   });

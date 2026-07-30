@@ -13,8 +13,11 @@
  * Workbench, no mode state. See ADR-0007.
  *
  * Scope: only tools shaped `guard → one (or few) call(s) → format once → footer
- * → catch`. Orchestration tools (`wb_reload`, `wb_play`/`wb_stop`, `wb_launch`,
- * `wb_diagnose`) with their own poll loops stay hand-written.
+ * → catch`. Seven tools stay hand-written — the orchestration ones with their own
+ * poll loops or side effects (`wb_reload`, `wb_play`/`wb_stop`, `wb_launch`,
+ * `wb_diagnose`, `wb_scenario`, `wb_entity_duplicate`) plus `wb_knowledge`, which
+ * makes no Workbench call at all. See ADR-0007's "Realised coverage boundary"
+ * for the authoritative table.
  */
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";

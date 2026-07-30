@@ -102,6 +102,15 @@ function warnings(r: DiagnosticReport): string[] {
   return out;
 }
 
+/**
+ * wb_diagnose — full read-only diagnostic of the MCP ↔ Workbench connection.
+ *
+ * Left hand-written (not migrated to defineWorkbenchTool, ADR-0007): a failed
+ * probe is diagnostic *evidence* here, not an error, so the tool runs several
+ * independent checks that are each allowed to fail and renders a verdict plus an
+ * environment-aware checklist over all of them. There is no single `apiFunc`
+ * whose failure should short-circuit the response.
+ */
 export function registerWbDiagnose(server: McpServer, client: WorkbenchClient): void {
   server.registerTool(
     "wb_diagnose",

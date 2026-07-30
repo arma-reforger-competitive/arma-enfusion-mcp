@@ -25,6 +25,7 @@ import { connectTools } from "./tools/wb-connect.js";
 import { registerWbDiagnose } from "./tools/wb-diagnose.js";
 import { registerWbReload } from "./tools/wb-reload.js";
 import { registerWbEditorTools } from "./tools/wb-editor.js";
+import { editorActionTools } from "./tools/wb-editor-actions.js";
 import { executeActionTools } from "./tools/wb-execute-action.js";
 import { registerWorkbenchTools } from "./workbench/define-tool.js";
 import { entityTools } from "./tools/wb-entities.js";
@@ -103,6 +104,7 @@ export function registerTools(server: McpServer, config: Config): void {
     ...executeActionTools,
     ...stateTools,
     ...connectTools,
+    ...editorActionTools,
   ]);
   registerScenarioTools(server, wbClient);
   registerScenarioCreate(server, config);
